@@ -285,7 +285,7 @@ export default function Home() {
 
       {/* ─── Footer ─── */}
       <footer className="text-center py-4 text-[11px] text-gray-300 border-t border-gray-100">
-        书签导航 · {bookmarks.length} 个书签 · 支持 AI 智能搜索 🔮
+        书签导航 · {bookmarks.length} 个书签 · 支持 AI 智能搜索 🔮 · <a href="/admin" className="hover:text-gray-400">后台</a>
       </footer>
 
       {/* ─── Search Modal ─── */}
