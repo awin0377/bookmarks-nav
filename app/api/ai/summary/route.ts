@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { chat, isAvailable } from '@/lib/ai';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
     if (!isAvailable()) {
