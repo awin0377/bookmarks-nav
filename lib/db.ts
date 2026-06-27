@@ -1,9 +1,9 @@
-import { neon, NeonQueryFunction } from '@neondatabase/serverless';
+import { neon } from '@neondatabase/serverless';
 
-// Lazy-init to avoid build-time errors when DATABASE_URL is not set
-let _sql: NeonQueryFunction<false, false> | null = null;
+// Module-level cache — initialized on first use
+let _sql: ReturnType<typeof neon> | null = null;
 
-function getSql(): NeonQueryFunction<false, false> {
+function getSql() {
   if (!_sql) {
     if (!process.env.DATABASE_URL) {
       throw new Error('DATABASE_URL environment variable is not set');
@@ -13,14 +13,13 @@ function getSql(): NeonQueryFunction<false, false> {
   return _sql;
 }
 
-// Proxy that lazily delegates to the real sql function
-const sql = new Proxy({} as NeonQueryFunction<false, false>, {
-  get(_target, prop) {
-    return (getSql() as any)[prop];
-  },
-  apply(_target, _thisArg, args) {
-    return (getSql() as any)(...args);
-  },
-});
+// Thin wrapper: tagged template literal → delegates to real sql
+// Avoids Proxy which breaks in some bundlers (e.g. Next.js serverless)
+function sql(strings: TemplateStringsArray, ...values: unknown[]): any {
+  return (getSql() as any)(strings, ...values);
+}
+
+// Expose query() for health-check style raw queries
+sql.query = (q: string) => (getSql() as any).query(q);
 
 export default sql;

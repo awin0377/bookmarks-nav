@@ -1,5 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // @neondatabase/serverless 是 ESM 包，Next.js 打包时会损坏其内部导出
+  // 标记为外部包，运行时直接加载 node_modules 原始文件
+  experimental: {
+    serverComponentsExternalPackages: ['@neondatabase/serverless'],
+  },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'www.google.com' },
