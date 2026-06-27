@@ -35,6 +35,10 @@ export default function Home() {
   const [search, setSearch] = useState('');
   const [recentIds, setRecentIds] = useState<number[]>([]);
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 100;
+
   // Search modal
   const [modalOpen, setModalOpen] = useState(false);
   const [modalQuery, setModalQuery] = useState('');
@@ -63,7 +67,12 @@ export default function Home() {
     }).catch(console.error).finally(() => setLoading(false));
   }, []);
 
-  // Local recent
+  // Reset page when category or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeCat, search]);
+
+  // ── Local recent ─────────────────────────────────────
   useEffect(() => {
     try {
       const stored = JSON.parse(localStorage.getItem('recent_bookmarks') || '[]');
@@ -140,6 +149,13 @@ export default function Home() {
     return list;
   }, [bookmarks, activeCat, search]);
 
+  // ── Paginated bookmarks ────────────────────────────
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paginated = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
+
   // ── Modal results ──────────────────────────────────
   const modalResults = useMemo(() => {
     if (aiMode) return (aiResults || []).map(b => ({ ...b }));
@@ -163,12 +179,12 @@ export default function Home() {
   // ── Group category view ────────────────────────────
   const grouped = useMemo(() => {
     const map: Record<string, Bookmark[]> = {};
-    for (const b of filtered) {
+    for (const b of paginated) {
       const cat = b.category_name || '其他';
       (map[cat] ||= []).push(b);
     }
     return map;
-  }, [filtered]);
+  }, [paginated]);
 
   // ── Favicon ────────────────────────────────────────
   const favicon = (domain: string) => {
@@ -275,30 +291,98 @@ export default function Home() {
         ) : filtered.length === 0 ? (
           <div className="text-center py-20 text-gray-400">没有匹配的书签</div>
         ) : (
-          Object.entries(grouped).map(([cat, items]) => (
-            <section key={cat} className="mb-6 bg-white rounded-lg border border-gray-100 overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-50 bg-gray-50/50">
-                <span className="text-sm font-semibold text-gray-800">{cat}</span>
-                <span className="text-[11px] text-gray-400 bg-gray-100 px-1.5 rounded-full">{items.length}</span>
+          <>
+            {/* Page info */}
+            {filtered.length > pageSize && (
+              <div className="text-xs text-gray-400 mb-3 text-center">
+                共 {filtered.length} 条，第 {currentPage}/{totalPages} 页，当前显示 {paginated.length} 条
               </div>
-              <div className="divide-y divide-gray-50">
-                {items.map(b => (
-                  <a key={b.id} href={b.url} target="_blank" rel="noopener" onClick={() => recordClick(b)}
-                    className={`flex items-center gap-3 px-4 py-2.5 hover:bg-[#f2f6ff] transition group ${b.is_dead ? 'opacity-40' : ''}`}>
-                    <img src={favicon(b.domain)} alt="" className="w-4 h-4 rounded-sm flex-shrink-0" loading="lazy"
-                      onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                    <span className="flex-1 text-sm text-gray-900 truncate group-hover:text-blue-600">{b.is_dead && '⚠️ '}{b.title}</span>
-                    {b.summary && (
-                      <span className="text-[11px] text-gray-400 truncate max-w-[200px] hidden md:inline">{b.summary}</span>
-                    )}
-                    {b.domain && !b.summary && (
-                      <span className="text-[11px] text-gray-400 truncate max-w-[180px] hidden sm:inline">{b.domain}</span>
-                    )}
-                  </a>
-                ))}
+            )}
+
+            {Object.entries(grouped).map(([cat, items]) => (
+              <section key={cat} className="mb-6 bg-white rounded-lg border border-gray-100 overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-50 bg-gray-50/50">
+                  <span className="text-sm font-semibold text-gray-800">{cat}</span>
+                  <span className="text-[11px] text-gray-400 bg-gray-100 px-1.5 rounded-full">{items.length}</span>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {items.map(b => (
+                    <a key={b.id} href={b.url} target="_blank" rel="noopener" onClick={() => recordClick(b)}
+                      className={`flex items-center gap-3 px-4 py-2.5 hover:bg-[#f2f6ff] transition group ${b.is_dead ? 'opacity-40' : ''}`}>
+                      <img src={favicon(b.domain)} alt="" className="w-4 h-4 rounded-sm flex-shrink-0" loading="lazy"
+                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      <span className="flex-1 text-sm text-gray-900 truncate group-hover:text-blue-600">{b.is_dead && '⚠️ '}{b.title}</span>
+                      {b.summary && (
+                        <span className="text-[11px] text-gray-400 truncate max-w-[200px] hidden md:inline">{b.summary}</span>
+                      )}
+                      {b.domain && !b.summary && (
+                        <span className="text-[11px] text-gray-400 truncate max-w-[180px] hidden sm:inline">{b.domain}</span>
+                      )}
+                    </a>
+                  ))}
+                </div>
+              </section>
+            ))}
+
+            {/* ── Pagination Controls ── */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-1 mt-6 flex-wrap">
+                {/* First page */}
+                <button
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  className="px-2 py-1 text-xs rounded border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="第一页"
+                >«</button>
+
+                {/* Previous page */}
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 text-xs rounded border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                >上一页</button>
+
+                {/* Page numbers */}
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(p => {
+                    // Show first, last, current, and 2 on each side of current
+                    return p === 1 || p === totalPages || Math.abs(p - currentPage) <= 2;
+                  })
+                  .map((p, i, arr) => (
+                    <>
+                      {/* Add ellipsis if gap > 1 */}
+                      {i > 0 && arr[i - 1] !== p - 1 && (
+                        <span key={`sep-${p}`} className="px-1 text-gray-300 text-xs">…</span>
+                      )}
+                      <button
+                        key={p}
+                        onClick={() => setCurrentPage(p)}
+                        className={`px-3 py-1 text-xs rounded border transition ${
+                          p === currentPage
+                            ? 'bg-gray-900 text-white border-gray-900 font-semibold'
+                            : 'border-gray-200 bg-white hover:bg-gray-50'
+                        }`}
+                      >{p}</button>
+                    </>
+                  ))}
+
+                {/* Next page */}
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1 text-xs rounded border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                >下一页</button>
+
+                {/* Last page */}
+                <button
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                  className="px-2 py-1 text-xs rounded border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="最后一页"
+                >»</button>
               </div>
-            </section>
-          ))
+            )}
+          </>
         )}
       </main>
 
