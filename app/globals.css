@@ -1,0 +1,134 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #fafafa;
+  --card: #ffffff;
+  --text: #111111;
+  --muted: #888888;
+  --border: #e5e5e5;
+  --accent: #1a1a1a;
+  --hover: #f2f6ff;
+  --cmd-bg: rgba(255, 255, 255, 0.95);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Command Palette Overlay */
+.cmd-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 15vh;
+}
+
+.cmd-panel {
+  width: 560px;
+  max-width: 90vw;
+  background: var(--cmd-bg);
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.cmd-input {
+  width: 100%;
+  padding: 14px 16px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  font-size: 16px;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+}
+
+.cmd-input::placeholder { color: #bbb; }
+
+.cmd-results {
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.cmd-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+}
+
+.cmd-item:hover, .cmd-item.active {
+  background: var(--hover);
+}
+
+.cmd-item .cmd-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.cmd-item .cmd-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cmd-item .cmd-domain {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.cmd-footer {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: #bbb;
+  display: flex;
+  gap: 12px;
+}
+
+/* AI Card Styles */
+.ai-card {
+  display: block;
+  padding: 14px 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: all 0.15s;
+  text-decoration: none;
+  color: inherit;
+}
+
+.ai-card:hover {
+  border-color: #c4b5fd;
+  box-shadow: 0 2px 12px rgba(139, 92, 246, 0.08);
+}
+
+/* AI loading dots */
+.ai-dot-pulse span {
+  animation: aiDots 0.8s infinite;
+}
+
+@keyframes aiDots {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1); }
+}
