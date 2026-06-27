@@ -252,7 +252,26 @@ export default function Home() {
       {/* ─── Main Content ─── */}
       <main className="max-w-5xl mx-auto px-4 py-6">
         {loading ? (
-          <div className="text-center py-20 text-gray-400">加载中...</div>
+          /* ── Skeleton Loading ── */
+          <div className="space-y-6">
+            {[0, 1, 2].map(s => (
+              <section key={s} className="bg-white rounded-lg border border-gray-100 overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-50 bg-gray-50/50">
+                  <div className="skeleton-line h-4 w-24" />
+                  <div className="skeleton-line h-4 w-8 rounded-full" />
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {[0, 1, 2, 3, 4].map(i => (
+                    <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+                      <div className="skeleton-line w-4 h-4 rounded-sm flex-shrink-0" />
+                      <div className="skeleton-line h-4 flex-1 max-w-[300px]" />
+                      <div className="skeleton-line h-3 w-20 hidden md:block" />
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-20 text-gray-400">没有匹配的书签</div>
         ) : (

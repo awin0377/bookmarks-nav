@@ -30,6 +30,7 @@ async function migrate() {
       icon TEXT NOT NULL DEFAULT '',
       is_dead BOOLEAN NOT NULL DEFAULT false,
       last_checked TIMESTAMPTZ,
+      summary TEXT NOT NULL DEFAULT '',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `;
@@ -51,6 +52,7 @@ async function migrate() {
   await sql`CREATE INDEX IF NOT EXISTS idx_bookmarks_url ON bookmarks(url);`;
   await sql`CREATE INDEX IF NOT EXISTS idx_clicks_bookmark ON clicks(bookmark_id);`;
   await sql`CREATE INDEX IF NOT EXISTS idx_clicks_time ON clicks(clicked_at DESC);`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_bookmarks_dead ON bookmarks(is_dead) WHERE is_dead = true;`;
   console.log('  ✅ indexes');
 
   console.log('\nMigration complete!');

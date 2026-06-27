@@ -28,12 +28,17 @@ export default function AdminPage() {
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('');
 
-  // Add form
+  // Manual add form
   const [addUrl, setAddUrl] = useState('');
   const [addTitle, setAddTitle] = useState('');
   const [addCat, setAddCat] = useState('');
   const [adding, setAdding] = useState(false);
   const [addMsg, setAddMsg] = useState('');
+
+  // ── Smart import (AI) ──
+  const [smartUrl, setSmartUrl] = useState('');
+  const [smartLoading, setSmartLoading] = useState(false);
+  const [smartMsg, setSmartMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   // Delete state
   const [deleting, setDeleting] = useState<number | null>(null);
@@ -58,7 +63,44 @@ export default function AdminPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // ── Add bookmark ─────────────────────────────────
+  // ── Smart import (AI auto-classify) ──────────────
+  const handleSmartImport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!smartUrl.trim()) return;
+
+    setSmartLoading(true);
+    setSmartMsg(null);
+    try {
+      const res = await fetch('/api/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: smartUrl.trim() }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setSmartMsg({ type: 'err', text: '❌ ' + data.error });
+      } else {
+        const b = data.bookmark;
+        const auto = data.auto;
+        const parts: string[] = [];
+        if (auto?.title_fetched) parts.push('自动抓取标题');
+        if (auto?.ai_classified) parts.push(`AI 分类: ${b.category_name || '?'}`);
+        if (auto?.ai_summarized) parts.push('AI 生成描述');
+        setSmartMsg({
+          type: 'ok',
+          text: `✅ 导入成功 — ${b.title}${parts.length ? ' (' + parts.join(' · ') + ')' : ''}`,
+        });
+        setSmartUrl('');
+        fetchData();
+      }
+    } catch {
+      setSmartMsg({ type: 'err', text: '❌ 网络错误' });
+    } finally {
+      setSmartLoading(false);
+    }
+  };
+
+  // ── Add bookmark (manual) ────────────────────────
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!addUrl.trim() || !addTitle.trim()) return;
@@ -79,7 +121,7 @@ export default function AdminPage() {
         setAddUrl('');
         setAddTitle('');
         setAddCat('');
-        fetchData(); // refresh list
+        fetchData();
       }
     } catch {
       setAddMsg('❌ 网络错误');
@@ -123,6 +165,8 @@ export default function AdminPage() {
     return true;
   });
 
+  const deadCount = bookmarks.filter(b => b.is_dead).length;
+
   return (
     <div className="min-h-screen bg-[#fafafa]">
       {/* Header */}
@@ -132,14 +176,52 @@ export default function AdminPage() {
             <h1 className="text-lg font-bold text-gray-900">⚙️ 后台管理</h1>
             <a href="/" className="text-xs text-blue-500 hover:text-blue-700">← 返回导航</a>
           </div>
-          <span className="text-xs text-gray-400">{bookmarks.length} 个书签</span>
+          <div className="flex items-center gap-3">
+            {deadCount > 0 && (
+              <span className="text-xs text-orange-500">⚠️ {deadCount} 个失效</span>
+            )}
+            <span className="text-xs text-gray-400">{bookmarks.length} 个书签</span>
+          </div>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6">
-        {/* ── Add Form ── */}
+        {/* ── AI Smart Import ── */}
+        <section className="bg-gradient-to-r from-purple-50 to-white rounded-lg border border-purple-100 p-5 mb-4">
+          <h2 className="text-sm font-semibold text-purple-700 mb-1 flex items-center gap-1.5">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            AI 智能导入
+          </h2>
+          <p className="text-[11px] text-purple-400 mb-3">输入网址，AI 自动抓取标题、判断分类、生成描述</p>
+          <form onSubmit={handleSmartImport} className="flex items-center gap-3">
+            <input
+              type="text"
+              value={smartUrl}
+              onChange={e => setSmartUrl(e.target.value)}
+              placeholder="https://example.com — 粘贴网址即可"
+              className="flex-1 px-3 py-2 text-sm border border-purple-200 rounded-md outline-none focus:border-purple-400 bg-white"
+              disabled={smartLoading}
+            />
+            <button
+              type="submit"
+              disabled={smartLoading || !smartUrl.trim()}
+              className="flex items-center gap-1.5 px-5 py-2 text-sm font-medium bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-40 transition whitespace-nowrap"
+            >
+              {smartLoading ? <><span className="import-spinner" /> AI 处理中...</> : '🔮 智能导入'}
+            </button>
+          </form>
+          {smartMsg && (
+            <p className={`mt-3 text-xs ${smartMsg.type === 'ok' ? 'text-green-600' : 'text-red-500'}`}>
+              {smartMsg.text}
+            </p>
+          )}
+        </section>
+
+        {/* ── Manual Add ── */}
         <section className="bg-white rounded-lg border border-gray-200 p-5 mb-6">
-          <h2 className="text-sm font-semibold text-gray-700 mb-3">➕ 新增书签</h2>
+          <h2 className="text-sm font-semibold text-gray-700 mb-3">➕ 手动新增</h2>
           <form onSubmit={handleAdd} className="flex flex-wrap items-end gap-3">
             <div className="flex-1 min-w-[200px]">
               <label className="block text-[11px] text-gray-400 mb-1">网址 *</label>
@@ -215,7 +297,20 @@ export default function AdminPage() {
 
         {/* ── Table ── */}
         {loading ? (
-          <div className="text-center py-20 text-gray-400">加载中...</div>
+          /* Skeleton */
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div className="border-b border-gray-100 bg-gray-50/50">
+              {[0, 1, 2, 3, 4, 5, 6, 7].map(i => (
+                <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-gray-50">
+                  <div className="skeleton-line w-6 h-3" />
+                  <div className="skeleton-line h-4 flex-1 max-w-[250px]" />
+                  <div className="skeleton-line w-20 h-3 hidden md:block" />
+                  <div className="skeleton-line w-16 h-3 hidden lg:block" />
+                  <div className="skeleton-line w-10 h-3" />
+                </div>
+              ))}
+            </div>
+          </div>
         ) : (
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
             <div className="overflow-x-auto">
@@ -231,7 +326,7 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {filtered.map((b, i) => (
+                  {filtered.map((b) => (
                     <tr key={b.id} className={`hover:bg-gray-50/50 ${b.is_dead ? 'opacity-40' : ''}`}>
                       <td className="px-4 py-2 text-[11px] text-gray-400">{b.id}</td>
                       <td className="px-4 py-2">
