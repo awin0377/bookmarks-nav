@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { url, title, category_name, is_featured, sort_order } = body;
+    const { url, title, category_name, is_featured, sort_order, summary: inputSummary } = body;
 
     if (!url || !title) {
       return NextResponse.json({ error: 'url 和 title 必填' }, { status: 400 });
@@ -121,24 +121,60 @@ export async function POST(req: NextRequest) {
       finalSortOrder = Number(maxSort[0]?.next_order || 1);
     }
 
+    // Use provided summary or auto-generate via DeepSeek
+    let summary = inputSummary || null;
+    const shouldAutoSummarize = !summary && process.env.DEEPSEEK_API_KEY;
+
     const result = await sql`
-      INSERT INTO bookmarks (url, title, domain, category_id, is_featured, sort_order)
-      VALUES (${url}, ${title}, ${domain}, ${categoryId}, ${is_featured || false}, ${finalSortOrder})
+      INSERT INTO bookmarks (url, title, domain, category_id, is_featured, sort_order, summary)
+      VALUES (${url}, ${title}, ${domain}, ${categoryId}, ${is_featured || false}, ${finalSortOrder}, ${summary || ''})
       ON CONFLICT (url) DO UPDATE SET
         title = ${title},
         domain = ${domain},
         category_id = COALESCE(${categoryId}, bookmarks.category_id),
         is_featured = COALESCE(${is_featured}, bookmarks.is_featured, false),
-        sort_order = CASE WHEN ${is_featured || false} = true THEN ${finalSortOrder} ELSE bookmarks.sort_order END
-      RETURNING id, url, title, domain, category_id, is_featured, sort_order, created_at;
+        sort_order = CASE WHEN ${is_featured || false} = true THEN ${finalSortOrder} ELSE bookmarks.sort_order END,
+        summary = COALESCE(${summary}, bookmarks.summary, '')
+      RETURNING id, url, title, domain, summary, category_id, is_featured, sort_order, created_at;
     `;
 
+    const bookmark = result[0];
+
+    // 异步生成 AI 描述（不阻塞响应）
+    if (shouldAutoSummarize) {
+      generateAndSaveSummary(bookmark.id, url, title).catch(e =>
+        console.error('Auto-summary failed:', e)
+      );
+    }
+
     return NextResponse.json({
-      bookmark: result[0],
-      action: result[0].created_at ? 'created' : 'updated',
+      bookmark,
+      action: bookmark.created_at ? 'created' : 'updated',
+      summaryPending: shouldAutoSummarize,
     });
   } catch (err: any) {
     console.error('POST bookmark error:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+// 后台异步生成 AI 描述并写入数据库
+async function generateAndSaveSummary(id: number, url: string, title: string) {
+  const { chat, isAvailable } = await import('@/lib/ai');
+  if (!isAvailable()) return;
+
+  const text = await chat(
+    [
+      {
+        role: 'system',
+        content: '你是一个网站描述生成器。根据网站 URL 和标题，用中文生成一句精炼的描述（15字以内），说明这个网站是做什么用的。只输出描述文本，不要引号、不要前缀、不要其他内容。如果不确定，输出空字符串。',
+      },
+      { role: 'user', content: `URL: ${url}\n标题: ${title || '未知'}` },
+    ],
+    { temperature: 0.1, max_tokens: 80 }
+  );
+
+  if (text) {
+    await sql`UPDATE bookmarks SET summary = ${text.trim()} WHERE id = ${id}`;
   }
 }
