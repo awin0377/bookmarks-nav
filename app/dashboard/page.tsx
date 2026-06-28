@@ -73,6 +73,9 @@ export default function Dashboard() {
   const [aiThinking, setAiThinking] = useState(false);
   const [fetchError, setFetchError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [editingSummary, setEditingSummary] = useState(false);  // add form: toggle summary edit
+  const [aiFailed, setAiFailed] = useState(false);             // AI summary failed, show fallback
+  const [editingCard, setEditingCard] = useState<{ id: number; summary: string } | null>(null); // inline card edit
   const urlInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = useCallback(() => {
@@ -113,6 +116,7 @@ export default function Dashboard() {
     setFetchError('');
     setAddTitle('');
     setAddSummary('');
+    setAiFailed(false);
     if (!val || !val.startsWith('http')) return;
 
     setFetching(true);
@@ -123,19 +127,31 @@ export default function Dashboard() {
       const data = await res.json();
       if (data.title && !data.error) {
         setAddTitle(data.title);
-        // Trigger AI summary in parallel
+        // Trigger AI summary in parallel — with timeout
         setAiThinking(true);
+        const aiController = new AbortController();
+        const aiTimeout = setTimeout(() => aiController.abort(), 10000);
         fetch('/api/ai/summary', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url: val, title: data.title }),
+          signal: aiController.signal,
         })
           .then(r => r.json())
           .then(d => {
-            if (d.summary) setAddSummary(d.summary);
+            clearTimeout(aiTimeout);
+            if (d.summary) {
+              setAddSummary(d.summary);
+            } else {
+              setAiFailed(true);
+            }
             setAiThinking(false);
           })
-          .catch(() => setAiThinking(false));
+          .catch(() => {
+            clearTimeout(aiTimeout);
+            setAiFailed(true);
+            setAiThinking(false);
+          });
       } else {
         setFetchError(data.error || '抓取失败');
       }
@@ -190,10 +206,25 @@ export default function Dashboard() {
     finally { setSubmitting(false); }
   };
 
+  // Save card summary (inline edit on existing cards)
+  const handleSaveCardSummary = async () => {
+    if (!editingCard) return;
+    try {
+      await fetch(`/api/bookmarks/${editingCard.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ summary: editingCard.summary }),
+      });
+      loadData();
+      setEditingCard(null);
+    } catch { /* ignore */ }
+  };
+
   const resetForm = () => {
     setAddUrl(''); setAddTitle(''); setAddCategory('');
     setAddSummary(''); setNewCatName(''); setShowNewCat(false);
     setFetchError(''); setAiThinking(false); setFetching(false);
+    setEditingSummary(false); setAiFailed(false);
   };
 
   // Focus on open
@@ -217,6 +248,11 @@ export default function Dashboard() {
 
   return (
     <div style={styles.container}>
+      <style>{`
+        .db-card:hover .db-card-edit { opacity: 1 !important; }
+        .db-card:hover { box-shadow: 0 4px 24px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04) !important; transform: translateY(-2px) !important; }
+        .db-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+      `}</style>
       {/* Top bar */}
       <div style={styles.topBar}>
         <Link href="/" style={styles.backLink}>
@@ -318,13 +354,32 @@ export default function Dashboard() {
               </div>
 
               {/* AI Summary preview */}
-              {(aiThinking || addSummary) && (
+              {(aiThinking || addSummary || aiFailed) && (
                 <div style={styles.aiRow}>
                   <span style={styles.aiLabel}>🤖 AI 描述</span>
                   {aiThinking ? (
                     <span style={styles.aiThinking}>生成中...</span>
+                  ) : aiFailed ? (
+                    <span style={styles.aiFailed}>生成失败</span>
+                  ) : editingSummary ? (
+                    <input
+                      type="text"
+                      value={addSummary}
+                      onChange={e => setAddSummary(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && setEditingSummary(false)}
+                      onBlur={() => setEditingSummary(false)}
+                      style={styles.summaryEditInput}
+                      autoFocus
+                    />
                   ) : (
-                    <span style={styles.aiSummary}>{addSummary}</span>
+                    <>
+                      <span style={styles.aiSummary}>{addSummary}</span>
+                      <button
+                        onClick={(e) => { e.preventDefault(); setEditingSummary(true); }}
+                        style={styles.editIcon}
+                        title="修改描述"
+                      >✎</button>
+                    </>
                   )}
                 </div>
               )}
@@ -367,25 +422,54 @@ export default function Dashboard() {
 
           <div style={styles.grid}>
             {filtered.map((b, i) => (
-              <a
-                key={b.id}
-                href={b.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ ...styles.card, animationDelay: `${i * 0.03}s` }}
-              >
-                <div style={{ ...styles.cardIcon, background: getGradient(b.category_name) }}>
-                  <span style={styles.cardIconText}>{getFavicon(b.title, b.domain)}</span>
-                </div>
-                <div style={styles.cardBody}>
-                  <div style={styles.cardTitle}>{b.title}</div>
-                  {b.summary ? (
-                    <div style={styles.cardSummary}>{b.summary}</div>
-                  ) : (
-                    <div style={styles.cardDomain}>{b.domain}</div>
-                  )}
-                </div>
-              </a>
+              <div key={b.id} className="db-card" style={{ ...styles.card, animationDelay: `${i * 0.03}s`, position: 'relative' }}>
+                <a
+                  href={b.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ display: 'flex', alignItems: 'center', gap: 16, flex: 1, minWidth: 0, textDecoration: 'none', color: 'inherit' }}
+                >
+                  <div style={{ ...styles.cardIcon, background: getGradient(b.category_name) }}>
+                    <span style={styles.cardIconText}>{getFavicon(b.title, b.domain)}</span>
+                  </div>
+                  <div style={styles.cardBody}>
+                    <div style={styles.cardTitle}>{b.title}</div>
+                    {editingCard?.id === b.id ? (
+                      <input
+                        type="text"
+                        value={editingCard.summary}
+                        onChange={e => setEditingCard({ id: b.id, summary: e.target.value })}
+                        onKeyDown={e => { if (e.key === 'Enter') handleSaveCardSummary(); if (e.key === 'Escape') setEditingCard(null); }}
+                        onBlur={handleSaveCardSummary}
+                        style={styles.cardSummaryInput}
+                        autoFocus
+                        onClick={e => e.stopPropagation()}
+                      />
+                    ) : b.summary ? (
+                      <div style={styles.cardSummary}>{b.summary}</div>
+                    ) : (
+                      <div style={styles.cardDomain}>{b.domain}</div>
+                    )}
+                  </div>
+                </a>
+                {/* Edit button — separate from link */}
+                <button
+                  className="db-card-edit"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (editingCard?.id === b.id) {
+                      handleSaveCardSummary();
+                    } else {
+                      setEditingCard({ id: b.id, summary: b.summary || '' });
+                    }
+                  }}
+                  style={styles.cardEditBtn}
+                  title={editingCard?.id === b.id ? '保存' : '编辑描述'}
+                >
+                  {editingCard?.id === b.id ? '✓' : '✎'}
+                </button>
+              </div>
             ))}
           </div>
         </>
@@ -534,6 +618,17 @@ const styles: Record<string, React.CSSProperties> = {
   aiLabel: { fontSize: 12, color: '#888', flexShrink: 0, fontWeight: 500 },
   aiThinking: { fontSize: 13, color: '#667eea', fontStyle: 'italic' },
   aiSummary: { fontSize: 13, color: '#3a3a5a', flex: 1 },
+  aiFailed: { fontSize: 13, color: '#c95a2a', fontWeight: 500 },
+  editIcon: {
+    background: 'none', border: 'none', color: '#999', cursor: 'pointer',
+    fontSize: 15, padding: '2px 6px', borderRadius: 6,
+    lineHeight: 1, flexShrink: 0, fontFamily: 'inherit',
+  },
+  summaryEditInput: {
+    flex: 1, fontSize: 13, color: '#1a1a2e',
+    border: '1px solid rgba(102,126,234,0.3)', borderRadius: 6,
+    padding: '2px 8px', background: '#fff', outline: 'none', fontFamily: 'inherit',
+  },
 
   submitBtn: {
     padding: '10px 24px', borderRadius: 12,
@@ -602,6 +697,20 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
   },
   cardDomain: { fontSize: 12, color: '#999' },
+  cardEditBtn: {
+    position: 'absolute', top: 10, right: 10,
+    width: 26, height: 26, borderRadius: 8,
+    border: 'none', background: 'rgba(0,0,0,0.04)',
+    color: '#999', fontSize: 14, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontFamily: 'inherit', flexShrink: 0,
+    opacity: 0, transition: 'opacity 0.2s',
+  },
+  cardSummaryInput: {
+    fontSize: 12.5, color: '#1a1a2e', width: '100%',
+    border: '1px solid rgba(102,126,234,0.3)', borderRadius: 6,
+    padding: '3px 8px', background: '#fff', outline: 'none', fontFamily: 'inherit',
+  },
 
   // ── 骨架屏 ──
   skeletonTopBar: {
