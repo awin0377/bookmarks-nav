@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { url, title, category_name } = body;
+    const { url, title, category_name, is_featured, sort_order } = body;
 
     if (!url || !title) {
       return NextResponse.json({ error: 'url 和 title 必填' }, { status: 400 });
@@ -114,14 +114,29 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Auto-calculate sort_order for featured bookmarks
+    let finalSortOrder = sort_order ?? 0;
+    if (is_featured && !sort_order) {
+      const maxSort = await sql`SELECT COALESCE(MAX(sort_order), 0) + 1 as next_order FROM bookmarks WHERE is_featured = true`;
+      finalSortOrder = Number(maxSort[0]?.next_order || 1);
+    }
+
     const result = await sql`
-      INSERT INTO bookmarks (url, title, domain, category_id)
-      VALUES (${url}, ${title}, ${domain}, ${categoryId})
-      ON CONFLICT (url) DO UPDATE SET title = ${title}, domain = ${domain}, category_id = COALESCE(${categoryId}, bookmarks.category_id)
-      RETURNING id, url, title, domain, category_id, created_at;
+      INSERT INTO bookmarks (url, title, domain, category_id, is_featured, sort_order)
+      VALUES (${url}, ${title}, ${domain}, ${categoryId}, ${is_featured || false}, ${finalSortOrder})
+      ON CONFLICT (url) DO UPDATE SET
+        title = ${title},
+        domain = ${domain},
+        category_id = COALESCE(${categoryId}, bookmarks.category_id),
+        is_featured = COALESCE(${is_featured}, bookmarks.is_featured, false),
+        sort_order = CASE WHEN ${is_featured || false} = true THEN ${finalSortOrder} ELSE bookmarks.sort_order END
+      RETURNING id, url, title, domain, category_id, is_featured, sort_order, created_at;
     `;
 
-    return NextResponse.json({ bookmark: result[0], action: result[0].created_at ? 'created' : 'updated' });
+    return NextResponse.json({
+      bookmark: result[0],
+      action: result[0].created_at ? 'created' : 'updated',
+    });
   } catch (err: any) {
     console.error('POST bookmark error:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });

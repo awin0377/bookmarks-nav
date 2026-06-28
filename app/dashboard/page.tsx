@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 
 interface Bookmark {
@@ -13,6 +13,12 @@ interface Bookmark {
   summary: string;
   is_featured: boolean;
   sort_order: number;
+}
+
+interface Category {
+  id: number;
+  name: string;
+  icon: string;
 }
 
 interface CategoryGroup {
@@ -48,13 +54,22 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<string>('all');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  // Add form state
+  const [showAdd, setShowAdd] = useState(false);
+  const [addUrl, setAddUrl] = useState('');
+  const [addTitle, setAddTitle] = useState('');
+  const [addCategory, setAddCategory] = useState('');
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [fetching, setFetching] = useState(false);
+  const [fetchError, setFetchError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const urlInputRef = useRef<HTMLInputElement>(null);
+
+  const loadData = () => {
     fetch('/api/bookmarks?featured=true')
       .then(r => r.json())
       .then(data => {
         const bookmarks: Bookmark[] = data.bookmarks || [];
-
-        // Group by category
         const map = new Map<string, CategoryGroup>();
         for (const b of bookmarks) {
           const cat = b.category_name || '其他';
@@ -70,7 +85,75 @@ export default function Dashboard() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadData();
+    // Load categories for the add form
+    fetch('/api/categories')
+      .then(r => r.json())
+      .then(data => setCategories(data.categories || []))
+      .catch(() => {});
   }, []);
+
+  // Auto-fetch title when URL is pasted
+  const handleUrlChange = async (val: string) => {
+    setAddUrl(val);
+    setFetchError('');
+    if (!val || !val.startsWith('http')) return;
+
+    setFetching(true);
+    try {
+      const res = await fetch(`/api/fetch-title?url=${encodeURIComponent(val)}`);
+      const data = await res.json();
+      if (data.title && !data.error) {
+        setAddTitle(data.title);
+      } else {
+        setFetchError(data.error || '抓取失败');
+      }
+    } catch {
+      setFetchError('网络错误');
+    } finally {
+      setFetching(false);
+    }
+  };
+
+  // Submit new bookmark
+  const handleAdd = async () => {
+    if (!addUrl || !addTitle) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/bookmarks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: addUrl,
+          title: addTitle,
+          category_name: addCategory || null,
+          is_featured: true,
+        }),
+      });
+      if (res.ok) {
+        setShowAdd(false);
+        setAddUrl('');
+        setAddTitle('');
+        setAddCategory('');
+        setFetchError('');
+        setLoading(true);
+        loadData();
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Handle paste event
+  useEffect(() => {
+    if (!showAdd) return;
+    urlInputRef.current?.focus();
+  }, [showAdd]);
 
   const filtered = activeTab === 'all'
     ? groups.flatMap(g => g.bookmarks)
@@ -78,7 +161,6 @@ export default function Dashboard() {
 
   const allTabs = groups.map(g => g.name);
 
-  // Skeleton loader
   if (loading) {
     return (
       <div style={styles.container}>
@@ -87,73 +169,157 @@ export default function Dashboard() {
     );
   }
 
-  // Empty state
-  if (groups.length === 0) {
-    return (
-      <div style={styles.container}>
-        <EmptyState />
-      </div>
-    );
-  }
-
   return (
     <div style={styles.container}>
-      {/* Subtle top bar */}
+      {/* Top bar */}
       <div style={styles.topBar}>
         <Link href="/" style={styles.backLink}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5m7-7l-7 7 7 7"/></svg>
           <span>首页</span>
         </Link>
-        <div style={styles.topTitle}>常用</div>
+        <div style={styles.topCenter}>
+          <div style={styles.topTitle}>常用</div>
+          <button
+            onClick={() => setShowAdd(!showAdd)}
+            style={{
+              ...styles.addBtn,
+              background: showAdd ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.08)',
+            }}
+            title="手动添加"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+          </button>
+        </div>
         <Link href="/admin" style={styles.adminLink}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </Link>
       </div>
 
-      {/* Horizontal tab bar */}
-      <div style={styles.tabBar}>
-        {allTabs.map(cat => (
-          <button
-            key={cat}
-            onClick={() => setActiveTab(cat)}
-            style={{
-              ...styles.tab,
-              ...(activeTab === cat ? styles.tabActive : {}),
-            }}
-          >
-            {cat}
-          </button>
-        ))}
-      </div>
+      {/* Add form (slide-down) */}
+      {showAdd && (
+        <div style={styles.addPanel}>
+          <div style={styles.addRow}>
+            <input
+              ref={urlInputRef}
+              type="url"
+              placeholder="粘贴网址 https://..."
+              value={addUrl}
+              onChange={e => handleUrlChange(e.target.value)}
+              style={styles.addInput}
+              autoFocus
+            />
+            {fetching && (
+              <div style={styles.fetchSpinner}>
+                <div style={{
+                  width: 20, height: 20, borderRadius: '50%',
+                  border: '2px solid rgba(255,255,255,0.2)',
+                  borderTopColor: '#667eea',
+                  animation: 'spin 0.6s linear infinite',
+                }} />
+              </div>
+            )}
+          </div>
 
-      {/* Bookmark cards grid */}
-      <div style={styles.grid}>
-        {filtered.map((b, i) => (
-          <a
-            key={b.id}
-            href={b.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              ...styles.card,
-              animationDelay: `${i * 0.03}s`,
-            }}
-          >
-            <div style={{
-              ...styles.cardIcon,
-              background: getGradient(b.category_name),
-            }}>
-              <span style={styles.cardIconText}>
-                {getFavicon(b.title, b.domain)}
-              </span>
-            </div>
-            <div style={styles.cardBody}>
-              <div style={styles.cardTitle}>{b.title}</div>
-              <div style={styles.cardDomain}>{b.domain}</div>
-            </div>
-          </a>
-        ))}
-      </div>
+          {(addTitle || fetchError) && !fetching && (
+            <>
+              {fetchError && !addTitle && (
+                <div style={styles.fetchError}>⚠ {fetchError}，请手动输入标题</div>
+              )}
+              <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                <input
+                  type="text"
+                  placeholder="书签标题"
+                  value={addTitle}
+                  onChange={e => setAddTitle(e.target.value)}
+                  style={{ ...styles.addInput, flex: 2 }}
+                />
+                <select
+                  value={addCategory}
+                  onChange={e => setAddCategory(e.target.value)}
+                  style={{ ...styles.addInput, flex: 1, cursor: 'pointer' }}
+                >
+                  <option value="">分类（可选）</option>
+                  {categories.map(c => (
+                    <option key={c.id} value={c.name}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <button
+                  onClick={handleAdd}
+                  disabled={!addUrl || !addTitle || submitting}
+                  style={{
+                    ...styles.submitBtn,
+                    opacity: (!addUrl || !addTitle) ? 0.4 : 1,
+                  }}
+                >
+                  {submitting ? '添加中...' : '添加到常用'}
+                </button>
+                <button
+                  onClick={() => { setShowAdd(false); setAddUrl(''); setAddTitle(''); setFetchError(''); }}
+                  style={styles.cancelBtn}
+                >
+                  取消
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {groups.length === 0 ? (
+        <EmptyState onAdd={() => setShowAdd(true)} />
+      ) : (
+        <>
+          {/* Horizontal tab bar */}
+          <div style={styles.tabBar}>
+            {allTabs.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setActiveTab(cat)}
+                style={{
+                  ...styles.tab,
+                  ...(activeTab === cat ? styles.tabActive : {}),
+                }}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          {/* Bookmark cards grid */}
+          <div style={styles.grid}>
+            {filtered.map((b, i) => (
+              <a
+                key={b.id}
+                href={b.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  ...styles.card,
+                  animationDelay: `${i * 0.03}s`,
+                }}
+              >
+                <div style={{
+                  ...styles.cardIcon,
+                  background: getGradient(b.category_name),
+                }}>
+                  <span style={styles.cardIconText}>
+                    {getFavicon(b.title, b.domain)}
+                  </span>
+                </div>
+                <div style={styles.cardBody}>
+                  <div style={styles.cardTitle}>{b.title}</div>
+                  <div style={styles.cardDomain}>{b.domain}</div>
+                </div>
+              </a>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -184,17 +350,22 @@ function Skeleton() {
   );
 }
 
-function EmptyState() {
+function EmptyState({ onAdd }: { onAdd: () => void }) {
   return (
     <div style={styles.emptyWrap}>
       <div style={styles.emptyIcon}>⭐</div>
       <div style={styles.emptyTitle}>还没有常用书签</div>
       <div style={styles.emptyDesc}>
-        去后台管理页面，点击 ⭐ 标记你最常用的书签
+        点击上方 + 按钮，粘贴网址即可添加
       </div>
-      <Link href="/admin" style={styles.emptyBtn}>
-        前往后台
-      </Link>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <button onClick={onAdd} style={styles.emptyBtn}>
+          手动添加
+        </button>
+        <Link href="/admin" style={{ ...styles.emptyBtn, background: 'rgba(255,255,255,0.1)' }}>
+          后台管理
+        </Link>
+      </div>
     </div>
   );
 }
@@ -202,7 +373,6 @@ function EmptyState() {
 // --- Helpers ---
 
 function getFavicon(title: string, domain: string): string {
-  // Simple first-letter favicon fallback
   const first = title.charAt(0).toUpperCase();
   if (/^[A-Za-z]$/.test(first)) return first;
   const d = domain.split('.')[0];
@@ -225,7 +395,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 32,
+    marginBottom: 24,
     padding: '0 4px',
   },
   backLink: {
@@ -238,17 +408,94 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 500,
     transition: 'color 0.2s',
   },
+  topCenter: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+  },
   topTitle: {
     fontSize: 17,
     fontWeight: 700,
     color: '#fff',
     letterSpacing: '0.02em',
   },
+  addBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    border: '1px solid rgba(255,255,255,0.15)',
+    color: '#f0f0f5',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.25s ease',
+  },
   adminLink: {
     color: '#a0a0c0',
     textDecoration: 'none',
     display: 'flex',
     transition: 'color 0.2s',
+  },
+
+  // Add panel
+  addPanel: {
+    marginBottom: 24,
+    padding: '18px 22px',
+    borderRadius: 18,
+    background: 'rgba(255,255,255,0.05)',
+    backdropFilter: 'blur(24px)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    animation: 'fadeInUp 0.3s ease',
+  },
+  addRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+  },
+  addInput: {
+    flex: 1,
+    padding: '12px 16px',
+    borderRadius: 12,
+    border: '1px solid rgba(255,255,255,0.12)',
+    background: 'rgba(255,255,255,0.06)',
+    color: '#f0f0f5',
+    fontSize: 15,
+    fontFamily: 'inherit',
+    outline: 'none',
+    transition: 'border-color 0.2s',
+    minWidth: 0,
+  },
+  fetchSpinner: {
+    marginLeft: -40,
+  },
+  fetchError: {
+    marginTop: 10,
+    fontSize: 13,
+    color: '#f5a623',
+  },
+  submitBtn: {
+    padding: '10px 24px',
+    borderRadius: 12,
+    background: 'linear-gradient(135deg, #667eea, #764ba2)',
+    color: '#fff',
+    border: 'none',
+    fontSize: 15,
+    fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'transform 0.2s, box-shadow 0.2s',
+    fontFamily: 'inherit',
+  },
+  cancelBtn: {
+    padding: '10px 20px',
+    borderRadius: 12,
+    background: 'rgba(255,255,255,0.08)',
+    color: '#a0a0c0',
+    border: '1px solid rgba(255,255,255,0.1)',
+    fontSize: 14,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    transition: 'all 0.2s',
   },
 
   // Tabs
@@ -410,6 +657,9 @@ const styles: Record<string, React.CSSProperties> = {
     textDecoration: 'none',
     fontSize: 16,
     fontWeight: 600,
+    border: 'none',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
     transition: 'transform 0.2s, box-shadow 0.2s',
   },
 };
