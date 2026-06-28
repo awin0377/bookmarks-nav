@@ -12,6 +12,19 @@ export async function GET(req: NextRequest) {
     const sort = searchParams.get('sort') || 'newest';
     const limit = parseInt(searchParams.get('limit') || '2000');
     const offset = parseInt(searchParams.get('offset') || '0');
+    const featured = searchParams.get('featured') === 'true';
+
+    // 常用书签：只返回标记的，按 sort_order 排序
+    if (featured) {
+      const rows = await sql`
+        SELECT b.*, c.name as category_name, c.icon as category_icon
+        FROM bookmarks b
+        LEFT JOIN categories c ON b.category_id = c.id
+        WHERE b.is_featured = true AND b.is_dead = false
+        ORDER BY b.sort_order ASC, b.created_at DESC
+      `;
+      return NextResponse.json({ bookmarks: rows, total: rows.length });
+    }
 
     let query: any;
     let countQuery: any;

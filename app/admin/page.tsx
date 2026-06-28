@@ -10,6 +10,8 @@ interface Bookmark {
   category_name: string;
   summary: string;
   is_dead: boolean;
+  is_featured: boolean;
+  sort_order: number;
   created_at: string;
 }
 
@@ -35,7 +37,7 @@ export default function AdminPage() {
   const [adding, setAdding] = useState(false);
   const [addMsg, setAddMsg] = useState('');
 
-  // ── Smart import (AI) ──
+  // Smart import (AI)
   const [smartUrl, setSmartUrl] = useState('');
   const [smartLoading, setSmartLoading] = useState(false);
   const [smartMsg, setSmartMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
@@ -43,7 +45,10 @@ export default function AdminPage() {
   // Delete state
   const [deleting, setDeleting] = useState<number | null>(null);
 
-  // ── Fetch data ───────────────────────────────────
+  // Toggle featured
+  const [toggling, setToggling] = useState<number | null>(null);
+
+  // Fetch data
   const fetchData = useCallback(async () => {
     try {
       const [bRes, cRes] = await Promise.all([
@@ -63,7 +68,7 @@ export default function AdminPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // ── Smart import (AI auto-classify) ──────────────
+  // Smart import (AI auto-classify)
   const handleSmartImport = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!smartUrl.trim()) return;
@@ -100,7 +105,7 @@ export default function AdminPage() {
     }
   };
 
-  // ── Add bookmark (manual) ────────────────────────
+  // Add bookmark (manual)
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!addUrl.trim() || !addTitle.trim()) return;
@@ -130,7 +135,7 @@ export default function AdminPage() {
     }
   };
 
-  // ── Delete bookmark ──────────────────────────────
+  // Delete bookmark
   const handleDelete = async (b: Bookmark) => {
     if (!confirm(`确认删除「${b.title}」？\n\n此操作不可撤销。`)) return;
 
@@ -150,7 +155,60 @@ export default function AdminPage() {
     }
   };
 
-  // ── Filter ───────────────────────────────────────
+  // Toggle featured
+  const handleToggleFeatured = async (b: Bookmark) => {
+    setToggling(b.id);
+    try {
+      const res = await fetch(`/api/bookmarks/${b.id}/feature`, { method: 'PUT' });
+      const data = await res.json();
+      if (!data.error) {
+        setBookmarks(prev => prev.map(x =>
+          x.id === b.id ? { ...x, is_featured: data.bookmark.is_featured, sort_order: data.bookmark.sort_order } : x
+        ));
+      }
+    } catch { /* ignore */ }
+    finally { setToggling(null); }
+  };
+
+  // Reorder featured (move up)
+  const handleMoveUp = async (id: number) => {
+    const featured = bookmarks.filter(b => b.is_featured).sort((a, b) => a.sort_order - b.sort_order);
+    const idx = featured.findIndex(b => b.id === id);
+    if (idx <= 0) return;
+
+    const newOrder = [...featured];
+    [newOrder[idx - 1], newOrder[idx]] = [newOrder[idx], newOrder[idx - 1]];
+
+    try {
+      await fetch('/api/bookmarks/reorder', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: newOrder.map(b => b.id) }),
+      });
+      fetchData();
+    } catch { /* ignore */ }
+  };
+
+  // Reorder featured (move down)
+  const handleMoveDown = async (id: number) => {
+    const featured = bookmarks.filter(b => b.is_featured).sort((a, b) => a.sort_order - b.sort_order);
+    const idx = featured.findIndex(b => b.id === id);
+    if (idx === -1 || idx >= featured.length - 1) return;
+
+    const newOrder = [...featured];
+    [newOrder[idx], newOrder[idx + 1]] = [newOrder[idx + 1], newOrder[idx]];
+
+    try {
+      await fetch('/api/bookmarks/reorder', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: newOrder.map(b => b.id) }),
+      });
+      fetchData();
+    } catch { /* ignore */ }
+  };
+
+  // Filter
   const filtered = bookmarks.filter(b => {
     if (catFilter && b.category_name !== catFilter) return false;
     if (search) {
@@ -166,6 +224,9 @@ export default function AdminPage() {
   });
 
   const deadCount = bookmarks.filter(b => b.is_dead).length;
+  const featuredList = bookmarks
+    .filter(b => b.is_featured)
+    .sort((a, b) => a.sort_order - b.sort_order);
 
   return (
     <div className="min-h-screen bg-[#fafafa]">
@@ -175,6 +236,8 @@ export default function AdminPage() {
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-bold text-gray-900">⚙️ 后台管理</h1>
             <a href="/" className="text-xs text-blue-500 hover:text-blue-700">← 返回导航</a>
+            <span className="text-gray-300">|</span>
+            <a href="/dashboard" className="text-xs text-purple-500 hover:text-purple-700">⭐ 常用面板</a>
           </div>
           <div className="flex items-center gap-3">
             {deadCount > 0 && (
@@ -220,7 +283,7 @@ export default function AdminPage() {
         </section>
 
         {/* ── Manual Add ── */}
-        <section className="bg-white rounded-lg border border-gray-200 p-5 mb-6">
+        <section className="bg-white rounded-lg border border-gray-200 p-5 mb-4">
           <h2 className="text-sm font-semibold text-gray-700 mb-3">➕ 手动新增</h2>
           <form onSubmit={handleAdd} className="flex flex-wrap items-end gap-3">
             <div className="flex-1 min-w-[200px]">
@@ -273,6 +336,51 @@ export default function AdminPage() {
           )}
         </section>
 
+        {/* ── Featured Management ── */}
+        {featuredList.length > 0 && (
+          <section className="bg-gradient-to-r from-amber-50 to-white rounded-lg border border-amber-100 p-5 mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-amber-700 flex items-center gap-1.5">
+                ⭐ 常用书签管理
+                <span className="text-[11px] font-normal text-amber-400">({featuredList.length} 个 — 显示在 /dashboard)</span>
+              </h2>
+              <a href="/dashboard" className="text-xs text-purple-500 hover:text-purple-700">
+                预览面板 →
+              </a>
+            </div>
+            <div className="space-y-1.5">
+              {featuredList.map((b, idx) => (
+                <div key={b.id} className="flex items-center gap-3 bg-white/60 rounded-md px-3 py-2 text-sm">
+                  <span className="text-[11px] text-gray-400 w-6 text-center">{idx + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium text-gray-800 truncate block">{b.title}</span>
+                  </div>
+                  <span className="text-[11px] text-gray-400 hidden sm:inline">{b.category_name}</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleMoveUp(b.id)}
+                      disabled={idx === 0}
+                      className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded disabled:opacity-20 transition"
+                      title="上移"
+                    >↑</button>
+                    <button
+                      onClick={() => handleMoveDown(b.id)}
+                      disabled={idx === featuredList.length - 1}
+                      className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded disabled:opacity-20 transition"
+                      title="下移"
+                    >↓</button>
+                    <button
+                      onClick={() => handleToggleFeatured(b)}
+                      className="px-2 py-1 text-xs text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition"
+                      title="取消常用"
+                    >✕</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* ── Filters ── */}
         <div className="flex items-center gap-3 mb-4">
           <input
@@ -322,6 +430,7 @@ export default function AdminPage() {
                     <th className="px-4 py-2.5 text-[11px] font-medium text-gray-500 hidden md:table-cell">域名</th>
                     <th className="px-4 py-2.5 text-[11px] font-medium text-gray-500 hidden lg:table-cell">分类</th>
                     <th className="px-4 py-2.5 text-[11px] font-medium text-gray-500 hidden lg:table-cell">描述</th>
+                    <th className="px-4 py-2.5 text-[11px] font-medium text-gray-500 w-12 text-center">⭐</th>
                     <th className="px-4 py-2.5 text-[11px] font-medium text-gray-500 w-16">操作</th>
                   </tr>
                 </thead>
@@ -343,6 +452,16 @@ export default function AdminPage() {
                       </td>
                       <td className="px-4 py-2 text-[11px] text-gray-400 truncate max-w-[200px] hidden lg:table-cell">
                         {b.summary || '-'}
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <button
+                          onClick={() => handleToggleFeatured(b)}
+                          disabled={toggling === b.id}
+                          className={`text-base transition ${b.is_featured ? 'text-yellow-500 hover:text-yellow-600' : 'text-gray-300 hover:text-yellow-400'}`}
+                          title={b.is_featured ? '取消常用' : '标为常用'}
+                        >
+                          {b.is_featured ? '★' : '☆'}
+                        </button>
                       </td>
                       <td className="px-4 py-2">
                         <button
