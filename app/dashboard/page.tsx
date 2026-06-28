@@ -229,7 +229,8 @@ export default function Dashboard() {
             onClick={() => { setShowAdd(!showAdd); if (showAdd) resetForm(); }}
             style={{
               ...styles.addBtn,
-              background: showAdd ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.08)',
+              background: showAdd ? 'rgba(0,0,0,0.08)' : 'rgba(0,0,0,0.04)',
+              color: '#333',
             }}
             title="手动添加"
           >
@@ -400,7 +401,7 @@ function Spinner() {
     <div style={{ marginLeft: -40, display: 'flex' }}>
       <div style={{
         width: 20, height: 20, borderRadius: '50%',
-        border: '2px solid rgba(255,255,255,0.2)',
+        border: '2px solid rgba(0,0,0,0.1)',
         borderTopColor: '#667eea',
         animation: 'spin 0.6s linear infinite',
       }} />
@@ -438,7 +439,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
       <div style={styles.emptyDesc}>点击上方 + ，粘贴网址即可添加，DeepSeek 自动生成描述</div>
       <div style={{ display: 'flex', gap: 10 }}>
         <button onClick={onAdd} style={styles.emptyBtn}>手动添加</button>
-        <Link href="/admin" style={{ ...styles.emptyBtn, background: 'rgba(255,255,255,0.1)' }}>后台管理</Link>
+        <Link href="/admin" style={{ ...styles.emptyBtn, background: 'rgba(0,0,0,0.06)', color: '#333' }}>后台管理</Link>
       </div>
     </div>
   );
@@ -451,47 +452,64 @@ function getFavicon(title: string, domain: string): string {
   return d.charAt(0).toUpperCase() || '🔗';
 }
 
-// --- Styles ---
+// ============================================================
+//  Apple 风格浅色渐变主题 — 高级感 + 高对比度文字
+// ============================================================
 
 const styles: Record<string, React.CSSProperties> = {
+  // ── 页面背景：柔和渐变，暖粉 → 冷蓝 ──
   container: {
     minHeight: '100vh',
-    background: 'linear-gradient(160deg, #0f0f1a 0%, #1a1a2e 30%, #16213e 70%, #0f3460 100%)',
+    background: `
+      linear-gradient(170deg,
+        #fef8f5 0%,
+        #fdf2f8 15%,
+        #f8f5fd 30%,
+        #f4f7fd 50%,
+        #eef6fc 70%,
+        #f2f9fa 85%,
+        #f6faf7 100%
+      )
+    `,
     padding: '24px 32px 60px',
     fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif',
-    color: '#f0f0f5',
+    color: '#1a1a2e',
   },
+
+  // ── 顶部栏 ──
   topBar: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
     marginBottom: 24, padding: '0 4px',
   },
   backLink: {
     display: 'flex', alignItems: 'center', gap: 6,
-    color: '#a0a0c0', textDecoration: 'none', fontSize: 14, fontWeight: 500,
+    color: '#5a5a7a', textDecoration: 'none', fontSize: 14, fontWeight: 500,
   },
-  topCenter: { display: 'flex', alignItems: 'center', gap: 10 },
-  topTitle: { fontSize: 17, fontWeight: 700, color: '#fff', letterSpacing: '0.02em' },
+  topCenter: { display: 'flex', alignItems: 'center', gap: 12 },
+  topTitle: { fontSize: 18, fontWeight: 700, color: '#1a1a2e', letterSpacing: '-0.01em' },
   addBtn: {
     width: 32, height: 32, borderRadius: 10,
-    border: '1px solid rgba(255,255,255,0.15)', color: '#f0f0f5',
+    border: '1px solid rgba(0,0,0,0.1)', color: '#333',
     cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
     transition: 'all 0.25s ease',
   },
-  adminLink: { color: '#a0a0c0', textDecoration: 'none', display: 'flex' },
+  adminLink: { color: '#7a7a9a', textDecoration: 'none', display: 'flex' },
 
-  // Add panel
+  // ── 添加面板 ──
   addPanel: {
-    marginBottom: 24, padding: '18px 22px', borderRadius: 18,
-    background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(24px)',
-    border: '1px solid rgba(255,255,255,0.1)',
+    marginBottom: 24, padding: '20px 24px', borderRadius: 20,
+    background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(30px)',
+    border: '1px solid rgba(0,0,0,0.06)',
+    boxShadow: '0 8px 40px rgba(0,0,0,0.05), 0 2px 8px rgba(0,0,0,0.03)',
     animation: 'fadeInUp 0.3s ease',
   },
   addRow: { display: 'flex', alignItems: 'center', gap: 10 },
   addInput: {
     padding: '12px 16px', borderRadius: 12,
-    border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.06)',
-    color: '#f0f0f5', fontSize: 15, fontFamily: 'inherit',
+    border: '1px solid rgba(0,0,0,0.1)', background: '#fff',
+    color: '#1a1a2e', fontSize: 15, fontFamily: 'inherit',
     outline: 'none', minWidth: 0,
+    boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
   },
   smallAddBtn: {
     padding: '8px 16px', borderRadius: 10,
@@ -501,21 +519,21 @@ const styles: Record<string, React.CSSProperties> = {
   },
   smallCancelBtn: {
     padding: '8px 10px', borderRadius: 10,
-    background: 'rgba(255,255,255,0.08)', color: '#a0a0c0',
-    border: '1px solid rgba(255,255,255,0.1)', fontSize: 14,
+    background: 'rgba(0,0,0,0.04)', color: '#999',
+    border: '1px solid rgba(0,0,0,0.08)', fontSize: 14,
     cursor: 'pointer', fontFamily: 'inherit',
   },
-  fetchError: { marginTop: 10, fontSize: 13, color: '#f5a623' },
+  fetchError: { marginTop: 10, fontSize: 13, color: '#c95a2a', fontWeight: 500 },
 
-  // AI summary
+  // ── AI 描述行 ──
   aiRow: {
-    marginTop: 10, padding: '8px 14px', borderRadius: 10,
-    background: 'rgba(102,126,234,0.1)', border: '1px solid rgba(102,126,234,0.2)',
+    marginTop: 10, padding: '10px 14px', borderRadius: 10,
+    background: 'rgba(102,126,234,0.06)', border: '1px solid rgba(102,126,234,0.15)',
     display: 'flex', alignItems: 'center', gap: 8,
   },
-  aiLabel: { fontSize: 12, color: '#a0a0c0', flexShrink: 0 },
+  aiLabel: { fontSize: 12, color: '#888', flexShrink: 0, fontWeight: 500 },
   aiThinking: { fontSize: 13, color: '#667eea', fontStyle: 'italic' },
-  aiSummary: { fontSize: 13, color: '#c0c0e0', flex: 1 },
+  aiSummary: { fontSize: 13, color: '#3a3a5a', flex: 1 },
 
   submitBtn: {
     padding: '10px 24px', borderRadius: 12,
@@ -526,12 +544,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
   cancelBtn: {
     padding: '10px 20px', borderRadius: 12,
-    background: 'rgba(255,255,255,0.08)', color: '#a0a0c0',
-    border: '1px solid rgba(255,255,255,0.1)', fontSize: 14,
+    background: 'rgba(0,0,0,0.04)', color: '#777',
+    border: '1px solid rgba(0,0,0,0.08)', fontSize: 14,
     cursor: 'pointer', fontFamily: 'inherit',
   },
 
-  // Tabs
+  // ── 横向导航标签 ──
   tabBar: {
     display: 'flex', gap: 10, overflowX: 'auto',
     paddingBottom: 8, marginBottom: 28,
@@ -539,83 +557,90 @@ const styles: Record<string, React.CSSProperties> = {
   },
   tab: {
     padding: '10px 22px', borderRadius: 20,
-    border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)',
-    color: '#a0a0c0', fontSize: 15, fontWeight: 500, cursor: 'pointer',
-    whiteSpace: 'nowrap', fontFamily: 'inherit', backdropFilter: 'blur(12px)',
+    border: '1px solid rgba(0,0,0,0.08)', background: 'rgba(255,255,255,0.5)',
+    color: '#555', fontSize: 15, fontWeight: 500, cursor: 'pointer',
+    whiteSpace: 'nowrap', fontFamily: 'inherit',
+    backdropFilter: 'blur(16px)',
+    transition: 'all 0.2s ease',
   },
   tabActive: {
-    background: 'rgba(255,255,255,0.15)', color: '#fff',
-    borderColor: 'rgba(255,255,255,0.35)', fontWeight: 600,
-    boxShadow: '0 4px 20px rgba(100, 120, 255, 0.2)',
+    background: '#fff', color: '#1a1a2e',
+    borderColor: 'rgba(0,0,0,0.12)', fontWeight: 600,
+    boxShadow: '0 4px 20px rgba(100, 120, 255, 0.12), 0 2px 6px rgba(0,0,0,0.04)',
   },
 
-  // Grid
+  // ── 卡片网格 ──
   grid: {
-    display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16,
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 14,
   },
 
-  // Card
+  // ── 书签卡片 ──
   card: {
     display: 'flex', alignItems: 'center', gap: 16,
-    padding: '18px 22px', borderRadius: 18,
-    background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(24px)',
-    border: '1px solid rgba(255,255,255,0.08)',
+    padding: '18px 22px', borderRadius: 20,
+    background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(24px)',
+    border: '1px solid rgba(0,0,0,0.05)',
+    boxShadow: '0 2px 16px rgba(0,0,0,0.03), 0 1px 4px rgba(0,0,0,0.02)',
     textDecoration: 'none', color: 'inherit',
     cursor: 'pointer', animation: 'fadeInUp 0.4s ease both',
+    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
   },
   cardIcon: {
-    width: 48, height: 48, borderRadius: 14,
+    width: 50, height: 50, borderRadius: 14,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    flexShrink: 0, boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+    flexShrink: 0, boxShadow: '0 8px 20px rgba(0,0,0,0.12)',
   },
-  cardIconText: { fontSize: 20, fontWeight: 700, color: '#fff' },
+  cardIconText: { fontSize: 21, fontWeight: 700, color: '#fff', lineHeight: 1 },
   cardBody: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 },
   cardTitle: {
-    fontSize: 16, fontWeight: 600, color: '#f0f0f5',
+    fontSize: 16, fontWeight: 600, color: '#1a1a2e',
     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+    letterSpacing: '-0.01em',
   },
   cardSummary: {
-    fontSize: 12, color: '#8888b0',
+    fontSize: 12.5, color: '#6a6a8a', fontWeight: 400,
     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
   },
-  cardDomain: { fontSize: 12, color: '#7878a0' },
+  cardDomain: { fontSize: 12, color: '#999' },
 
-  // Skeleton
+  // ── 骨架屏 ──
   skeletonTopBar: {
-    height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.04)',
+    height: 36, borderRadius: 10, background: 'rgba(0,0,0,0.04)',
     marginBottom: 32, animation: 'pulse 1.5s ease-in-out infinite',
   },
   skeletonTabs: { display: 'flex', gap: 10, marginBottom: 28 },
   skeletonTab: {
     width: 80, height: 36, borderRadius: 20,
-    background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite',
+    background: 'rgba(0,0,0,0.04)', animation: 'pulse 1.5s ease-in-out infinite',
   },
   skeletonCard: {
     display: 'flex', alignItems: 'center', gap: 16,
-    padding: '18px 22px', borderRadius: 18, background: 'rgba(255,255,255,0.03)',
+    padding: '18px 22px', borderRadius: 20,
+    background: 'rgba(255,255,255,0.5)',
   },
   skeletonIcon: {
-    width: 48, height: 48, borderRadius: 14,
-    background: 'rgba(255,255,255,0.06)', animation: 'pulse 1.5s ease-in-out infinite',
+    width: 50, height: 50, borderRadius: 14,
+    background: 'rgba(0,0,0,0.05)', animation: 'pulse 1.5s ease-in-out infinite',
   },
   skeletonLine: {
     height: 14, width: '90%', borderRadius: 6,
-    background: 'rgba(255,255,255,0.05)', marginBottom: 8,
+    background: 'rgba(0,0,0,0.04)', marginBottom: 8,
     animation: 'pulse 1.5s ease-in-out infinite',
   },
 
-  // Empty
+  // ── 空状态 ──
   emptyWrap: {
     display: 'flex', flexDirection: 'column', alignItems: 'center',
     justifyContent: 'center', minHeight: '70vh', textAlign: 'center',
   },
-  emptyIcon: { fontSize: 64, marginBottom: 24, filter: 'grayscale(0.5)' },
-  emptyTitle: { fontSize: 24, fontWeight: 700, color: '#f0f0f5', marginBottom: 10 },
-  emptyDesc: { fontSize: 15, color: '#7878a0', marginBottom: 32, maxWidth: 380 },
+  emptyIcon: { fontSize: 64, marginBottom: 24 },
+  emptyTitle: { fontSize: 24, fontWeight: 700, color: '#1a1a2e', marginBottom: 10 },
+  emptyDesc: { fontSize: 15, color: '#777', marginBottom: 32, maxWidth: 380 },
   emptyBtn: {
     padding: '12px 32px', borderRadius: 12,
     background: 'linear-gradient(135deg, #667eea, #764ba2)',
     color: '#fff', textDecoration: 'none', fontSize: 16, fontWeight: 600,
     border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+    boxShadow: '0 4px 16px rgba(102,126,234,0.25)',
   },
 };
