@@ -3,7 +3,7 @@ import sql from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-// PATCH /api/bookmarks/[id] — 更新书签字段（summary, description, tags, features, title, url）
+// PATCH /api/bookmarks/[id] — 更新书签字段
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -13,38 +13,29 @@ export async function PATCH(
     if (isNaN(id)) {
       return NextResponse.json({ error: '无效 ID' }, { status: 400 });
     }
+
     const body = await req.json();
 
-    // Build parameterized SET clause
-    const setParts: string[] = [];
-    const values: any[] = [];
-
-    if (body.summary !== undefined) { setParts.push(`summary = $${values.length + 1}`); values.push(body.summary); }
-    if (body.description !== undefined) { setParts.push(`description = $${values.length + 1}`); values.push(body.description); }
-    if (body.tags !== undefined) {
-      const t = typeof body.tags === 'string' ? body.tags : JSON.stringify(body.tags);
-      setParts.push(`tags = $${values.length + 1}`); values.push(t);
-    }
-    if (body.features !== undefined) {
-      const f = typeof body.features === 'string' ? body.features : JSON.stringify(body.features);
-      setParts.push(`features = $${values.length + 1}`); values.push(f);
-    }
-    if (body.title !== undefined) { setParts.push(`title = $${values.length + 1}`); values.push(body.title); }
-    if (body.sort_order !== undefined) { setParts.push(`sort_order = $${values.length + 1}`); values.push(body.sort_order); }
-
-    if (setParts.length === 0) {
-      return NextResponse.json({ error: '没有可更新的字段' }, { status: 400 });
-    }
-
-    const setClause = setParts.join(', ');
-    const queryStr = `UPDATE bookmarks SET ${setClause} WHERE id = $${values.length + 1} RETURNING *`;
-    values.push(id);
-
-    const result = await sql(queryStr, values);
-
-    if (result.length === 0) {
+    // 先取出当前记录，作为未传入字段的默认值
+    const existing = await sql`SELECT * FROM bookmarks WHERE id = ${id}`;
+    if (!existing || existing.length === 0) {
       return NextResponse.json({ error: '书签不存在' }, { status: 404 });
     }
+    const cur = existing[0];
+
+    // 用 tagged template 一次性更新，未传入字段沿用当前值
+    const result = await sql`
+      UPDATE bookmarks SET
+        summary      = ${body.summary !== undefined ? body.summary : cur.summary},
+        description  = ${body.description !== undefined ? body.description : cur.description},
+        tags         = ${body.tags !== undefined ? (typeof body.tags === 'string' ? body.tags : JSON.stringify(body.tags)) : cur.tags},
+        features     = ${body.features !== undefined ? (typeof body.features === 'string' ? body.features : JSON.stringify(body.features)) : cur.features},
+        title        = ${body.title !== undefined ? body.title : cur.title},
+        sort_order   = ${body.sort_order !== undefined ? body.sort_order : cur.sort_order}
+      WHERE id = ${id}
+      RETURNING *
+    `;
+
     return NextResponse.json({ bookmark: result[0] });
   } catch (err: any) {
     console.error('PATCH bookmark error:', err);
@@ -64,7 +55,7 @@ export async function DELETE(
     }
 
     const result = await sql`DELETE FROM bookmarks WHERE id = ${id} RETURNING id, title`;
-    
+
     if (result.length === 0) {
       return NextResponse.json({ error: '书签不存在' }, { status: 404 });
     }

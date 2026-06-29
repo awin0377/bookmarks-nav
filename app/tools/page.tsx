@@ -258,8 +258,15 @@ export default function ToolsPage() {
     setSaving(true);
     setSaveMsg(null);
 
+    // 防御：确保 bookmarks 是数组
+    if (!Array.isArray(bookmarks) || bookmarks.length === 0) {
+      setSaveMsg({ type: 'error', text: '没有书签数据可保存' });
+      setSaving(false);
+      return;
+    }
+
     // 只发送 id 和 sort_order，后端据此同步删除和排序
-    const payload = bookmarks.map(b => ({ id: b.id, sort_order: b.sort_order }));
+    const payload = bookmarks.map(b => ({ id: b.id, sort_order: b.sort_order ?? 0 }));
 
     try {
       const res = await fetch('/api/save-bookmarks', {

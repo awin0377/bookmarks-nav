@@ -14,18 +14,8 @@ function getSql() {
 }
 
 // Thin wrapper: tagged template literal → delegates to real sql
-// Avoids Proxy which breaks in some bundlers (e.g. Next.js serverless)
-function sql(strings: TemplateStringsArray | string, ...values: unknown[]): any {
+function sql(strings: TemplateStringsArray, ...values: unknown[]): any {
   const fn = getSql() as any;
-  if (typeof strings === 'string') {
-    // Ordinary function call: sql("SELECT ...", [param1, param2])
-    // The first (and only) rest value is the params array; spread it
-    const params = values[0];
-    if (Array.isArray(params) && params.length > 0) {
-      return fn(strings, ...params);
-    }
-    return fn(strings);
-  }
   return fn(strings, ...values);
 }
 

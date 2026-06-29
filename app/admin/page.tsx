@@ -51,6 +51,16 @@ export default function AdminPage() {
   // Toggle featured
   const [toggling, setToggling] = useState<number | null>(null);
 
+  // ── AI Wash (automatic classify loop) ──
+  const [washRunning, setWashRunning] = useState(false);
+  const [washPaused, setWashPaused] = useState(false);
+  const [washProgress, setWashProgress] = useState({ total: 0, done: 0 });
+  const [washCurrent, setWashCurrent] = useState('');
+  const [washError, setWashError] = useState('');
+  const [washResult, setWashResult] = useState<{ id: number; title: string; category: string; ok: boolean }[]>([]);
+  const washRunningRef = { current: false };
+  const washPausedRef = { current: false };
+
   // Fetch data
   const fetchData = useCallback(async () => {
     try {
@@ -173,6 +183,95 @@ export default function AdminPage() {
     finally { setToggling(null); }
   };
 
+  // ── AI Wash: auto-classify loop ──
+  const washTargetCategory = '其他存档';
+
+  const handleStartWash = async () => {
+    const pending = bookmarks.filter(b => b.category_name === washTargetCategory);
+    if (pending.length === 0) {
+      setWashError('没有待清洗的书签');
+      return;
+    }
+
+    setWashRunning(true);
+    setWashPaused(false);
+    setWashError('');
+    setWashResult([]);
+    setWashProgress({ total: pending.length, done: 0 });
+    setWashCurrent('');
+    washRunningRef.current = true;
+    washPausedRef.current = false;
+
+    let done = 0;
+    for (let i = 0; i < pending.length; i++) {
+      while (washPausedRef.current && washRunningRef.current) {
+        await new Promise(r => setTimeout(r, 200));
+      }
+      if (!washRunningRef.current) break;
+
+      const b = pending[i];
+      setWashCurrent(b.title.slice(0, 30));
+
+      try {
+        const res = await fetch('/api/ai-classify-single', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: b.id, title: b.title, description: b.description || b.summary }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          done++;
+          setWashProgress({ total: pending.length, done });
+          setWashResult(prev => [...prev.slice(-20), {
+            id: b.id, title: b.title.slice(0, 20),
+            category: data.bookmark.category_name, ok: true,
+          }]);
+          setBookmarks(prev => prev.map(x =>
+            x.id === b.id
+              ? { ...x, category_name: data.bookmark.category_name, tags: JSON.stringify(data.bookmark.tags), description: data.bookmark.description }
+              : x
+          ));
+        } else {
+          setWashResult(prev => [...prev.slice(-20), {
+            id: b.id, title: b.title.slice(0, 20),
+            category: data.error || '失败', ok: false,
+          }]);
+        }
+      } catch {
+        setWashResult(prev => [...prev.slice(-20), {
+          id: b.id, title: b.title.slice(0, 20),
+          category: '网络错误', ok: false,
+        }]);
+      }
+
+      if (i < pending.length - 1 && washRunningRef.current) {
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+
+    setWashRunning(false);
+    washRunningRef.current = false;
+    setWashCurrent('');
+  };
+
+  const handlePauseWash = () => {
+    setWashPaused(!washPaused);
+    washPausedRef.current = !washPausedRef.current;
+  };
+
+  const handleStopWash = () => {
+    setWashRunning(false);
+    washRunningRef.current = false;
+    washPausedRef.current = false;
+    setWashPaused(false);
+    setWashCurrent('');
+  };
+
+  const pendingCount = bookmarks.filter(b => b.category_name === washTargetCategory).length;
+  const washSuccess = washResult.filter(r => r.ok).length;
+  const washFail = washResult.filter(r => !r.ok).length;
+
   // Reorder featured (move up)
   const handleMoveUp = async (id: number) => {
     const featured = bookmarks.filter(b => b.is_featured).sort((a, b) => a.sort_order - b.sort_order);
@@ -284,6 +383,105 @@ export default function AdminPage() {
             <p className={`mt-3 text-xs ${smartMsg.type === 'ok' ? 'text-green-600' : 'text-red-500'}`}>
               {smartMsg.text}
             </p>
+          )}
+        </section>
+
+        {/* ── AI Wash Console ── */}
+        <section className="bg-gradient-to-r from-teal-50 to-white rounded-lg border border-teal-100 p-5 mb-4">
+          <h2 className="text-sm font-semibold text-teal-700 mb-1 flex items-center gap-1.5">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            AI 智能洗数控制台
+          </h2>
+          <p className="text-[11px] text-teal-400 mb-3">
+            自动逐条清洗「{washTargetCategory}」分类的书签，调用 DeepSeek 重新归类并生成 SEO 描述（间隔 1 秒防限流）
+          </p>
+
+          {/* Stats row */}
+          <div className="flex flex-wrap items-center gap-3 mb-3">
+            <span className="text-xs font-medium text-gray-600 bg-white/70 px-3 py-1.5 rounded-md border border-gray-200">
+              待清洗：<strong className="text-teal-600">{pendingCount}</strong> 条
+            </span>
+            {washRunning && (
+              <>
+                <span className="text-xs text-gray-500 bg-white/70 px-3 py-1.5 rounded-md border border-gray-200">
+                  进度：<strong className="text-teal-600">{washProgress.done}</strong> / {washProgress.total}
+                </span>
+                {washCurrent && (
+                  <span className="text-xs text-gray-400 truncate max-w-[200px]">
+                    当前：{washCurrent}...
+                  </span>
+                )}
+              </>
+            )}
+            {washSuccess > 0 && (
+              <span className="text-xs text-green-600">✅ {washSuccess} 成功</span>
+            )}
+            {washFail > 0 && (
+              <span className="text-xs text-red-500">❌ {washFail} 失败</span>
+            )}
+          </div>
+
+          {/* Progress bar */}
+          {washRunning && washProgress.total > 0 && (
+            <div className="w-full bg-gray-200 rounded-full h-2 mb-3 overflow-hidden">
+              <div
+                className="bg-teal-500 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${Math.round((washProgress.done / washProgress.total) * 100)}%` }}
+              />
+            </div>
+          )}
+
+          {/* Controls */}
+          <div className="flex items-center gap-2.5">
+            {!washRunning ? (
+              <button
+                onClick={handleStartWash}
+                disabled={pendingCount === 0}
+                className="flex items-center gap-1.5 px-5 py-2 text-sm font-medium bg-teal-600 text-white rounded-md hover:bg-teal-700 disabled:opacity-40 transition"
+              >
+                ▶ 开始自动洗数
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={handlePauseWash}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-amber-500 text-white rounded-md hover:bg-amber-600 transition"
+                >
+                  {washPaused ? '▶ 继续' : '⏸ 暂停'}
+                </button>
+                <button
+                  onClick={handleStopWash}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-red-500 text-white rounded-md hover:bg-red-600 transition"
+                >
+                  ⏹ 停止
+                </button>
+              </>
+            )}
+          </div>
+
+          {washError && (
+            <p className="mt-2 text-xs text-red-500">{washError}</p>
+          )}
+
+          {/* Recent results log */}
+          {washResult.length > 0 && (
+            <div className="mt-3 max-h-[180px] overflow-y-auto border border-gray-100 rounded-md bg-white/60">
+              <table className="w-full text-xs">
+                <tbody>
+                  {washResult.slice().reverse().map((r, i) => (
+                    <tr key={i} className={i === 0 ? '' : 'border-t border-gray-50'}>
+                      <td className="px-3 py-1.5 text-gray-400 w-8 text-center">
+                        {r.ok ? '✅' : '❌'}
+                      </td>
+                      <td className="px-2 py-1.5 text-gray-700 truncate max-w-[180px]">{r.title}</td>
+                      <td className="px-3 py-1.5 text-gray-500 truncate max-w-[140px]">{r.category}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
 
