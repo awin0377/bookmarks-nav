@@ -107,7 +107,7 @@ function SortableCategory({ cat, isActive, onScrollTo }: { cat: Category; isActi
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={() => onScrollTo(cat.name)}>
       <span style={styles.navEmoji}>{meta.emoji}</span>
       <span style={{ ...styles.navName, cursor: 'grab' }}>{cat.name}</span>
       <span style={{ ...styles.navCount, ...(isActive ? styles.navCountActive : {}) }}>
