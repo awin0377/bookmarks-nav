@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { url, title, category_name, is_featured, sort_order, summary: inputSummary } = body;
+    const { url, title, category_name, is_featured, sort_order, summary: inputSummary, tags: inputTags, features: inputFeatures, description: inputDesc } = body;
 
     if (!url || !title) {
       return NextResponse.json({ error: 'url 和 title 必填' }, { status: 400 });
@@ -123,19 +123,25 @@ export async function POST(req: NextRequest) {
 
     // Use provided summary or auto-generate via DeepSeek
     let summary = inputSummary || null;
+    let tags = typeof inputTags === 'string' ? inputTags : JSON.stringify(inputTags || []);
+    let features = typeof inputFeatures === 'string' ? inputFeatures : JSON.stringify(inputFeatures || []);
+    let description = inputDesc || '';
     const shouldAutoSummarize = !summary && process.env.DEEPSEEK_API_KEY;
 
     const result = await sql`
-      INSERT INTO bookmarks (url, title, domain, category_id, is_featured, sort_order, summary)
-      VALUES (${url}, ${title}, ${domain}, ${categoryId}, ${is_featured || false}, ${finalSortOrder}, ${summary || ''})
+      INSERT INTO bookmarks (url, title, domain, category_id, is_featured, sort_order, summary, tags, features, description)
+      VALUES (${url}, ${title}, ${domain}, ${categoryId}, ${is_featured || false}, ${finalSortOrder}, ${summary || ''}, ${tags}, ${features}, ${description})
       ON CONFLICT (url) DO UPDATE SET
         title = ${title},
         domain = ${domain},
         category_id = COALESCE(${categoryId}, bookmarks.category_id),
         is_featured = COALESCE(${is_featured}, bookmarks.is_featured, false),
         sort_order = CASE WHEN ${is_featured || false} = true THEN ${finalSortOrder} ELSE bookmarks.sort_order END,
-        summary = COALESCE(${summary}, bookmarks.summary, '')
-      RETURNING id, url, title, domain, summary, category_id, is_featured, sort_order, created_at;
+        summary = COALESCE(${summary}, bookmarks.summary, ''),
+        tags = CASE WHEN ${inputTags !== undefined} THEN ${tags} ELSE bookmarks.tags END,
+        features = CASE WHEN ${inputFeatures !== undefined} THEN ${features} ELSE bookmarks.features END,
+        description = CASE WHEN ${inputDesc !== undefined && inputDesc !== ''} THEN ${description} ELSE bookmarks.description END
+      RETURNING id, url, title, domain, summary, description, tags, features, category_id, is_featured, sort_order, created_at;
     `;
 
     const bookmark = result[0];
@@ -158,7 +164,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// 后台异步生成 AI 描述并写入数据库
+// 后台异步生成 AI 描述、标签、卖点并写入数据库
 async function generateAndSaveSummary(id: number, url: string, title: string) {
   const { chat, isAvailable } = await import('@/lib/ai');
   if (!isAvailable()) return;
@@ -167,14 +173,48 @@ async function generateAndSaveSummary(id: number, url: string, title: string) {
     [
       {
         role: 'system',
-        content: '你是一个网站描述生成器。根据网站 URL 和标题，用中文生成一句精炼的描述（15字以内），说明这个网站是做什么用的。只输出描述文本，不要引号、不要前缀、不要其他内容。如果不确定，输出空字符串。',
+        content: `你是一个网站分析器。根据 URL 和标题，用中文生成 SEO 数据，返回纯 JSON（不要 markdown 代码块）：
+
+{
+  "summary": "一句话描述（15字以内）",
+  "description": "详细功能说明（50-120字，含核心卖点）",
+  "tags": ["标签1", "标签2", "标签3"],
+  "features": ["卖点1 简短说明", "卖点2 简短说明", "卖点3 简短说明"]
+}
+
+规则：
+- summary: 精炼，说明核心用途
+- description: 展开写功能特色、适用场景，适合 SEO 摘要
+- tags: 3-5个分类标签（如：免费、国内直连、AI、生产力、设计等）
+- features: 3个核心卖点，每个8-15字
+- 如果不确定，字段设为空`,
       },
       { role: 'user', content: `URL: ${url}\n标题: ${title || '未知'}` },
     ],
-    { temperature: 0.1, max_tokens: 80 }
+    { temperature: 0.1, max_tokens: 400 }
   );
 
-  if (text) {
-    await sql`UPDATE bookmarks SET summary = ${text.trim()} WHERE id = ${id}`;
+  if (!text) return;
+
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return;
+    const data = JSON.parse(jsonMatch[0]);
+
+    const summary = (data.summary || '').trim();
+    const description = (data.description || '').trim();
+    const tags = JSON.stringify(data.tags || []);
+    const features = JSON.stringify(data.features || []);
+
+    await sql`
+      UPDATE bookmarks 
+      SET summary = CASE WHEN summary = '' THEN ${summary} ELSE summary END,
+          description = CASE WHEN description = '' THEN ${description} ELSE description END,
+          tags = CASE WHEN tags = '[]' THEN ${tags} ELSE tags END,
+          features = CASE WHEN features = '[]' THEN ${features} ELSE features END
+      WHERE id = ${id}
+    `;
+  } catch (e) {
+    console.error('Failed to parse AI SEO data:', e);
   }
 }

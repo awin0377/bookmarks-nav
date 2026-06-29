@@ -9,6 +9,9 @@ interface Bookmark {
   domain: string;
   category_name: string;
   summary: string;
+  description: string;
+  tags: string;
+  features: string;
   is_dead: boolean;
   is_featured: boolean;
   sort_order: number;
@@ -237,6 +240,8 @@ export default function AdminPage() {
             <h1 className="text-lg font-bold text-gray-900">⚙️ 后台管理</h1>
             <a href="/" className="text-xs text-blue-500 hover:text-blue-700">← 返回导航</a>
             <span className="text-gray-300">|</span>
+            <a href="/tools" className="text-xs text-green-500 hover:text-green-700">🔧 工具集</a>
+            <span className="text-gray-300">|</span>
             <a href="/dashboard" className="text-xs text-purple-500 hover:text-purple-700">⭐ 常用面板</a>
           </div>
           <div className="flex items-center gap-3">
@@ -429,7 +434,8 @@ export default function AdminPage() {
                     <th className="px-4 py-2.5 text-[11px] font-medium text-gray-500">标题</th>
                     <th className="px-4 py-2.5 text-[11px] font-medium text-gray-500 hidden md:table-cell">域名</th>
                     <th className="px-4 py-2.5 text-[11px] font-medium text-gray-500 hidden lg:table-cell">分类</th>
-                    <th className="px-4 py-2.5 text-[11px] font-medium text-gray-500 hidden lg:table-cell">描述</th>
+                    <th className="px-4 py-2.5 text-[11px] font-medium text-gray-500 hidden xl:table-cell">描述</th>
+                    <th className="px-4 py-2.5 text-[11px] font-medium text-gray-500 hidden xl:table-cell">标签</th>
                     <th className="px-4 py-2.5 text-[11px] font-medium text-gray-500 w-12 text-center">⭐</th>
                     <th className="px-4 py-2.5 text-[11px] font-medium text-gray-500 w-16">操作</th>
                   </tr>
@@ -451,7 +457,10 @@ export default function AdminPage() {
                         <span className="bg-gray-100 px-1.5 py-0.5 rounded">{b.category_name || '-'}</span>
                       </td>
                       <td className="px-4 py-2 text-[11px] text-gray-400 truncate max-w-[200px] hidden lg:table-cell">
-                        {b.summary || '-'}
+                        {b.summary || b.description || '-'}
+                      </td>
+                      <td className="px-4 py-2 text-[11px] text-gray-400 truncate max-w-[150px] hidden xl:table-cell">
+                        {(() => { try { const t = JSON.parse(b.tags || '[]'); return Array.isArray(t) ? t.join(', ') : '-'; } catch { return '-'; } })()}
                       </td>
                       <td className="px-4 py-2 text-center">
                         <button
