@@ -178,3 +178,12 @@ body {
   0%, 100% { opacity: 0.3; }
   50%      { opacity: 0.6; }
 }
+
+/* Hide scrollbar on mobile category tabs */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
