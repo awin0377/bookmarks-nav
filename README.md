@@ -1,17 +1,18 @@
 # 📚 书签导航网站
 
-一个基于 Next.js 14 + Neon PostgreSQL + DeepSeek AI 的私人书签导航系统，支持 AI 智能搜索、智能导入、死链巡检等功能。
+一个基于 Next.js 14 + Neon PostgreSQL + DeepSeek AI 的私人书签导航系统，支持 AI 智能搜索、分类管理、编辑模式、置顶排序等功能。
 
 ## ✨ 功能特性
 
 - 🔍 **AI 智能搜索** — 用自然语言描述你想找什么，AI 帮你匹配书签
 - 🔮 **AI 智能导入** — 输入网址，AI 自动抓取标题、判断分类、生成描述
+- ✏️ **编辑模式** — 直接在前端编辑书签、移动分类、置顶/取消置顶
+- 📂 **分类管理** — 侧边栏分类导航，支持重命名、拖拽排序
 - 📄 **分页浏览** — 每页 100 条，告别上千书签卡顿
 - 🛡️ **密码保护** — 私人使用，简单密码认证
 - 🔗 **死链巡检** — 定时自动检测失效链接并标记
 - 📊 **点击统计** — 记录书签点击次数，展示最近访问
-- ⚡ **API 限流** — 防止滥用，保护服务稳定
-- 💀 **骨架屏** — 加载时优雅的占位动画
+- 📱 **响应式布局** — 桌面侧边栏 + 手机横向滚动分类
 
 ## 🛠️ 技术栈
 
@@ -27,7 +28,7 @@
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/awin0377/bookmarks-nav.git
+git clone https://github.com/your-username/bookmarks-nav.git
 cd bookmarks-nav
 ```
 
@@ -42,8 +43,8 @@ npm install
 复制 `.env.local.example` 为 `.env.local`，填写以下变量：
 
 ```
-DATABASE_URL=postgresql://neondb_owner:xxx@xxx.neon.tech/neondb?sslmode=require
-DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxx
+DATABASE_URL=postgresql://user:***@xxx.neon.tech/db?sslmode=require
+DEEPSEEK_API_KEY=***
 PASSWORD=你的密码
 CRON_SECRET=定时任务密钥（可选）
 ```
@@ -51,15 +52,15 @@ CRON_SECRET=定时任务密钥（可选）
 ### 4. 初始化数据库
 
 ```bash
-npx tsx scripts/migrate.ts
+node scripts/migrate.js
 ```
 
 ### 5. 导入书签
 
-将你的浏览器书签 HTML 文件放在项目根目录，然后运行：
+准备一个 JSON 文件（格式：`{"categories": {"分类名": [{"url": "...", "title": "..."}]}}`），然后运行：
 
 ```bash
-npx tsx scripts/seed.ts
+node scripts/seed2.js
 ```
 
 ### 6. 启动开发服务器
@@ -131,10 +132,6 @@ npm run start       # 启动生产服务器
 - 🔮 AI 智能导入（输入网址自动识别）
 - 🗑️ 删除书签
 - 📊 查看所有书签列表
-
-## 🌐 在线演示
-
-部署后的访问地址：`https://bookmarks-nav.vercel.app`（需配置密码）
 
 ## 📄 License
 
