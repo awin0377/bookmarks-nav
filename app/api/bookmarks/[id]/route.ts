@@ -40,6 +40,20 @@ export async function PATCH(
       setClauses.push(`category_id = $${idx++}`);
       values.push(body.category_id);
     }
+    if (body.is_featured !== undefined) {
+      setClauses.push(`is_featured = $${idx++}`);
+      values.push(body.is_featured);
+      // Auto-set sort_order for featured
+      if (body.is_featured) {
+        setClauses.push(`sort_order = COALESCE((SELECT COALESCE(MAX(sort_order), 0) + 1 FROM bookmarks WHERE is_featured = true AND id != ${id}), 1)`);
+      } else {
+        setClauses.push(`sort_order = 0`);
+      }
+    }
+    if (body.sort_order !== undefined) {
+      setClauses.push(`sort_order = $${idx++}`);
+      values.push(body.sort_order);
+    }
 
     if (setClauses.length === 0) {
       return NextResponse.json({ error: '没有可更新的字段' }, { status: 400 });

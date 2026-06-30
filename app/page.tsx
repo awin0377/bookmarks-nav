@@ -30,7 +30,7 @@ function getGrad(name: string, suffix: 'header' | 'card' | 'hover'): string {
 interface Bookmark {
   id: number; url: string; title: string; domain: string;
   category_name: string; category_id: number; category_icon: string; icon: string;
-  is_dead: boolean; summary: string; ai_note?: string;
+  is_dead: boolean; is_featured: boolean; sort_order: number; summary: string; ai_note?: string;
 }
 interface Category {
   id: number; name: string; icon: string; bookmark_count: number; sort_order: number;
@@ -89,6 +89,10 @@ export default function Home() {
 
   // Delete confirm
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+
+  // Rename category
+  const [renameModal, setRenameModal] = useState<{ open: boolean; id: number | null; name: string }>({ open: false, id: null, name: '' });
+  const [renameSaving, setRenameSaving] = useState(false);
 
   // Move to category
   const [moveModal, setMoveModal] = useState<{ open: boolean; id: number | null; title: string }>({ open: false, id: null, title: '' });
@@ -184,7 +188,12 @@ export default function Home() {
       const q = search.toLowerCase();
       list = list.filter(b => b.title.toLowerCase().includes(q) || b.url.toLowerCase().includes(q) || b.domain.toLowerCase().includes(q));
     }
-    return list;
+    // Sort: featured first, then by sort_order, then by id desc
+    return list.sort((a, b) => {
+      if ((b as any).is_featured !== (a as any).is_featured) return (b as any).is_featured ? 1 : -1;
+      if ((a as any).sort_order !== (b as any).sort_order) return (a as any).sort_order - (b as any).sort_order;
+      return b.id - a.id;
+    });
   }, [bookmarks, activeCat, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -278,6 +287,36 @@ export default function Home() {
     } catch (err) { console.error(err); }
   }, []);
 
+  // ── Rename Category ──────────────────────────────────
+  const saveRename = useCallback(async () => {
+    if (!renameModal.id || !renameModal.name.trim()) return;
+    setRenameSaving(true);
+    try {
+      const res = await fetch('/api/categories', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: renameModal.id, name: renameModal.name.trim() }),
+      });
+      if (res.ok) {
+        setRenameModal({ open: false, id: null, name: '' });
+        fetchData();
+      }
+    } catch (err) { console.error(err); }
+    finally { setRenameSaving(false); }
+  }, [renameModal, fetchData]);
+
+  // ── Pin/Unpin Bookmark ───────────────────────────────
+  const togglePin = useCallback(async (b: Bookmark) => {
+    try {
+      const res = await fetch(`/api/bookmarks/${b.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_featured: !(b as any).is_featured }),
+      });
+      if (res.ok) fetchData();
+    } catch (err) { console.error(err); }
+  }, [fetchData]);
+
   // ── Move Bookmark ────────────────────────────────────
   const moveBookmark = useCallback(async (bookmarkId: number, categoryId: number) => {
     setMoveSaving(true);
@@ -325,12 +364,12 @@ export default function Home() {
                     onClick={() => { setActiveCat(cat.name); setMobileCatOpen(false); }} />
                   {editMode && (
                     <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition">
+                      <button onClick={e => { e.stopPropagation(); setRenameModal({ open: true, id: cat.id, name: cat.name }); }}
+                        className="p-0.5 text-gray-400 hover:text-blue-600 bg-white rounded" title="重命名">✎</button>
                       <button onClick={e => { e.stopPropagation(); moveCatOrder(cat.id, -1); }}
-                        className="p-0.5 text-gray-400 hover:text-gray-700 bg-white rounded"
-                        title="上移">▲</button>
+                        className="p-0.5 text-gray-400 hover:text-gray-700 bg-white rounded" title="上移">▲</button>
                       <button onClick={e => { e.stopPropagation(); moveCatOrder(cat.id, 1); }}
-                        className="p-0.5 text-gray-400 hover:text-gray-700 bg-white rounded"
-                        title="下移">▼</button>
+                        className="p-0.5 text-gray-400 hover:text-gray-700 bg-white rounded" title="下移">▼</button>
                     </div>
                   )}
                 </div>
@@ -441,6 +480,10 @@ export default function Home() {
                           editMode ? 'cursor-default border-dashed border-gray-300' :
                           'hover:shadow-md hover:-translate-y-0.5 hover:border-gray-200 active:scale-[0.98] cursor-pointer'
                         } ${b.is_dead ? 'opacity-40' : ''}`}>
+                        {/* Pin badge */}
+                        {(b as any).is_featured && !editMode && (
+                          <div className="absolute -top-1.5 -right-1.5 z-10 w-5 h-5 flex items-center justify-center bg-yellow-400 rounded-full text-[10px] shadow-sm">⭐</div>
+                        )}
                         {/* Top gradient line */}
                         <div className={`absolute top-0 left-3 right-3 h-0.5 rounded-full bg-gradient-to-r ${getGrad(b.category_name || '', 'header')} opacity-0 group-hover:opacity-100 transition-opacity`} />
                         {/* Icon + Title */}
@@ -472,6 +515,13 @@ export default function Home() {
                       {/* Edit mode: action buttons */}
                       {editMode && (
                         <div className="absolute -top-2 -right-2 flex gap-1 z-20">
+                          <button onClick={() => togglePin(b)}
+                            className={`w-7 h-7 flex items-center justify-center rounded-full border shadow-sm text-xs transition ${
+                              (b as any).is_featured
+                                ? 'bg-yellow-100 border-yellow-300 text-yellow-600'
+                                : 'bg-white border-gray-200 text-gray-400 hover:text-yellow-500 hover:border-yellow-300'
+                            }`}
+                            title={(b as any).is_featured ? '取消置顶' : '置顶'}>⭐</button>
                           <button onClick={() => openEditModal(b)}
                             className="w-7 h-7 flex items-center justify-center rounded-full bg-white border border-gray-200 shadow-sm text-xs text-gray-500 hover:text-blue-600 hover:border-blue-300 transition"
                             title="编辑">✎</button>
@@ -625,6 +675,27 @@ export default function Home() {
             <div className="mt-3 text-center">
               <button onClick={() => setMoveModal({ open: false, id: null, title: '' })}
                 className="text-xs text-gray-400 hover:text-gray-600">取消</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ RENAME CATEGORY MODAL ═══ */}
+      {renameModal.open && (
+        <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center" onClick={() => setRenameModal({ open: false, id: null, name: '' })}>
+          <div className="w-[360px] max-w-[90vw] bg-white rounded-xl shadow-2xl p-5" onClick={e => e.stopPropagation()}>
+            <h2 className="text-sm font-semibold mb-3">✎ 重命名分类</h2>
+            <input type="text" value={renameModal.name} onChange={e => setRenameModal(prev => ({ ...prev, name: e.target.value }))}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+              autoFocus
+              onKeyDown={e => { if (e.key === 'Enter') saveRename(); }} />
+            <div className="flex gap-2 mt-4 justify-end">
+              <button onClick={() => setRenameModal({ open: false, id: null, name: '' })}
+                className="px-4 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">取消</button>
+              <button onClick={saveRename} disabled={renameSaving || !renameModal.name.trim()}
+                className="px-4 py-2 text-sm bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-lg hover:from-violet-700 hover:to-fuchsia-700 disabled:opacity-40">
+                {renameSaving ? '保存中...' : '保存'}
+              </button>
             </div>
           </div>
         </div>
