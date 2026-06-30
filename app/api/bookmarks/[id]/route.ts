@@ -3,7 +3,7 @@ import sql from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-// PATCH /api/bookmarks/[id] — 更新书签描述
+// PATCH /api/bookmarks/[id] — 更新书签
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -14,14 +14,50 @@ export async function PATCH(
       return NextResponse.json({ error: '无效 ID' }, { status: 400 });
     }
     const body = await req.json();
-    if (body.summary === undefined) {
+
+    // Build SET clauses
+    const setClauses: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+
+    if (body.title !== undefined) {
+      setClauses.push(`title = $${idx++}`);
+      values.push(body.title);
+    }
+    if (body.url !== undefined) {
+      setClauses.push(`url = $${idx++}`);
+      values.push(body.url);
+      let domain = '';
+      try { domain = new URL(body.url).hostname.replace(/^www\./, ''); } catch {}
+      setClauses.push(`domain = $${idx++}`);
+      values.push(domain);
+    }
+    if (body.summary !== undefined) {
+      setClauses.push(`summary = $${idx++}`);
+      values.push(body.summary);
+    }
+    if (body.category_id !== undefined) {
+      setClauses.push(`category_id = $${idx++}`);
+      values.push(body.category_id);
+    }
+
+    if (setClauses.length === 0) {
       return NextResponse.json({ error: '没有可更新的字段' }, { status: 400 });
     }
-    const result = await sql`UPDATE bookmarks SET summary = ${body.summary} WHERE id = ${id} RETURNING *`;
-    if (result.length === 0) {
+
+    values.push(id);
+    const query = `UPDATE bookmarks SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING *`;
+    
+    // Use raw query via the serverless driver's query method
+    const { neon } = await import('@neondatabase/serverless');
+    const driver = neon(process.env.DATABASE_URL!);
+    const result: any = await driver(query, values);
+
+    const rows = Array.isArray(result) ? result : (result?.rows || []);
+    if (rows.length === 0) {
       return NextResponse.json({ error: '书签不存在' }, { status: 404 });
     }
-    return NextResponse.json({ bookmark: result[0] });
+    return NextResponse.json({ bookmark: rows[0] });
   } catch (err: any) {
     console.error('PATCH bookmark error:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -38,13 +74,10 @@ export async function DELETE(
     if (isNaN(id)) {
       return NextResponse.json({ error: '无效 ID' }, { status: 400 });
     }
-
     const result = await sql`DELETE FROM bookmarks WHERE id = ${id} RETURNING id, title`;
-    
     if (result.length === 0) {
       return NextResponse.json({ error: '书签不存在' }, { status: 404 });
     }
-
     return NextResponse.json({ deleted: result[0] });
   } catch (err: any) {
     console.error('DELETE bookmark error:', err);

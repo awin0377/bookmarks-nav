@@ -19,6 +19,69 @@ export async function GET() {
   }
 }
 
+// PUT — 更新分类（含排序）
+export async function PUT(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { id, name, sort_order } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: 'id 必填' }, { status: 400 });
+    }
+
+    if (sort_order !== undefined) {
+      // Update sort_order only
+      await sql`UPDATE categories SET sort_order = ${sort_order} WHERE id = ${id}`;
+      return NextResponse.json({ success: true, id, sort_order });
+    }
+
+    if (name !== undefined) {
+      await sql`UPDATE categories SET name = ${name} WHERE id = ${id}`;
+      return NextResponse.json({ success: true, id, name });
+    }
+
+    return NextResponse.json({ error: '没有可更新的字段' }, { status: 400 });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+// PATCH — 批量重排分类顺序
+export async function PATCH(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { reorder } = body;
+    if (!reorder || !Array.isArray(reorder)) {
+      return NextResponse.json({ error: 'reorder 数组必填' }, { status: 400 });
+    }
+    for (const item of reorder) {
+      await sql`UPDATE categories SET sort_order = ${item.sort_order} WHERE id = ${item.id}`;
+    }
+    return NextResponse.json({ success: true, reordered: reorder.length });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+// DELETE — 删除分类
+export async function DELETE(req: NextRequest) {
+  try {
+    const { id } = await req.json();
+    if (!id) {
+      return NextResponse.json({ error: 'id 必填' }, { status: 400 });
+    }
+    // Unlink bookmarks first
+    await sql`UPDATE bookmarks SET category_id = NULL WHERE category_id = ${id}`;
+    const result = await sql`DELETE FROM categories WHERE id = ${id} RETURNING *`;
+    if (result.length === 0) {
+      return NextResponse.json({ error: '分类不存在' }, { status: 404 });
+    }
+    return NextResponse.json({ deleted: result[0] });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
 // POST — 创建自定义分类
 export async function POST(req: NextRequest) {
   try {
