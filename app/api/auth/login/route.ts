@@ -4,7 +4,11 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   const { password } = await request.json();
-  const expected = process.env.PASSWORD || '123456';
+  const expected = process.env.PASSWORD;
+
+  if (!expected) {
+    return NextResponse.json({ error: 'Server misconfigured: PASSWORD not set' }, { status: 500 });
+  }
 
   if (password !== expected) {
     return NextResponse.json({ error: '密码错误' }, { status: 401 });

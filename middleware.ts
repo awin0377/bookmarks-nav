@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Password from env variable, default: '123456'
-const PASSWORD = process.env.PASSWORD || '123456';
+// Password from env variable — required, no default
+const PASSWORD = process.env.PASSWORD;
+if (!PASSWORD) {
+  throw new Error('PASSWORD environment variable is required');
+}
 const COOKIE_NAME = 'bn_auth';
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
