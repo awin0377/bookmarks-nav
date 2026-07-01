@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Password from env variable, default: '123456'
-const PASSWORD = process.env.PASSWORD || '123456';
+const PASSWORD = process.env.PASSWORD
 const COOKIE_NAME = 'bn_auth';
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
@@ -79,6 +78,11 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/favicon')
   ) {
     return NextResponse.next();
+  }
+
+  // If PASSWORD env is not configured, deny all access (redirect to login)
+  if (!PASSWORD) {
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
   // Check auth cookie
